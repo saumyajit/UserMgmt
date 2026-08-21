@@ -7,6 +7,7 @@ use CController;
 use CControllerResponseData;
 use CControllerResponseFatal;
 use CWebUser;
+use Throwable;
 
 class UserPolicyExecute extends CController {
 	protected function checkInput(): bool {
@@ -25,7 +26,7 @@ class UserPolicyExecute extends CController {
 	}
 
 	protected function checkPermissions(): bool {
-		return $this->getUserType() == USER_TYPE_SUPER_ADMIN;
+		return CWebUser::getType() == USER_TYPE_SUPER_ADMIN;
 	}
 
 	protected function doAction(): void {
@@ -37,8 +38,19 @@ class UserPolicyExecute extends CController {
 
 		foreach ($selected as $userid) {
 			$user = API::User()->get([
-				'output' => ['userid', 'username', 'name', 'surname', 'roleid'],
-				'selectRole' => ['roleid', 'name', 'type', 'readonly'],
+				'output' => [
+					'userid',
+					'username',
+					'name',
+					'surname',
+					'roleid'
+				],
+				'selectRole' => [
+					'roleid',
+					'name',
+					'type',
+					'readonly'
+				],
 				'userids' => $userid
 			]);
 
@@ -84,10 +96,6 @@ class UserPolicyExecute extends CController {
 				}
 			}
 			else {
-				/*
-				 * Do not update users_status on a shared group. Zabbix applies
-				 * users_status at user-group level, not independently per user.
-				 */
 				$errors[] = sprintf(
 					_('Disable skipped for %s: disabling is group-level in Zabbix.'),
 					$user['username']
