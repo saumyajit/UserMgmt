@@ -5,6 +5,8 @@ namespace Modules\UserPolicy\Actions;
 use API;
 use CController;
 use CControllerResponseData;
+use CControllerResponseFatal;
+use CWebUser;
 
 class UserPolicyExecute extends CController {
 	protected function checkInput(): bool {
@@ -16,13 +18,7 @@ class UserPolicyExecute extends CController {
 		]);
 
 		if (!$ret) {
-			$this->setResponse(new \CControllerResponseFatal());
-			return false;
-		}
-
-		if (!$this->getInput('confirm', 0) && !$this->getInput('dry_run', 1)) {
-			error(_('Confirmation is required before making changes.'));
-			$ret = false;
+			$this->setResponse(new CControllerResponseFatal());
 		}
 
 		return $ret;
@@ -36,115 +32,46 @@ class UserPolicyExecute extends CController {
 		$selected = array_map('strval', $this->getInput('selected', []));
 		$operation = $this->getInput('operation', 'disable');
 		$dry_run = (int) $this->getInput('dry_run', 1);
-
 		$processed = [];
 		$errors = [];
 
 		foreach ($selected as $userid) {
-			try {
-				$user = API::User()->get([
-					'output' => [
-						'userid',
-						'username',
-						'name',
-						'surname',
-						'roleid'
-					],
-					'selectRole' => [
-						'roleid',
-						'name',
-						'type',
-						'readonly'
-					],
-					'userids' => $userid
-				]);
+			$user = API::User()->get([
+				'output' => ['userid', 'username', 'name', 'surname', 'roleid'],
+				'selectRole' => ['roleid', 'name', 'type', 'readonly'],
+				'userids' => $userid
+			]);
 
-				if (!$user) {
-					$errors[] = sprintf(_('User ID %s was not found.'), $userid);
-					continue;
-				}
+			if (!$user) {
+				$errors[] = sprintf(_('User ID %s was not found.'), $userid);
+				continue;
+			}
 
-				$user = $user[0];
+			$user = $user[0];
 
-				if ($userid === (string) CWebUser::$data['userid']) {
-					$errors[] = sprintf(_('User %s is the current account and was skipped.'), $user['username']);
-					continue;
-				}
+			if ($userid === (string) CWebUser::$data['userid']) {
+				$errors[] = sprintf(_('Current user %s was skipped.'), $user['username']);
+				continue;
+			}
 
-				if ($this->isProtectedUser($user)) {
-					$errors[] = sprintf(_('Protected user %s was skipped.'), $user['username']);
-					continue;
-				}
+			if ($this->isProtectedUser($user)) {
+				$errors[] = sprintf(_('Protected user %s was skipped.'), $user['username']);
+				continue;
+			}
 
-				if ($dry_run) {
-					$processed[] = [
-						'userid' => $userid,
-						'username' => $user['username'],
-						'operation' => $operation,
-						'status' => 'dry-run'
-					];
-					continue;
-				}
+			if ($dry_run) {
+				$processed[] = [
+					'userid' => $userid,
+					'username' => $user['username'],
+					'operation' => $operation,
+					'status' => 'dry-run'
+				];
+				continue;
+			}
 
-				if ($operation === 'disable') {
-					/*
-					 * Important: Zabbix user disabling is group-based.
-					 * This updates the user's groups while preserving group
-					 * membership, changing users_status for each group.
-					 *
-					 * Do not use this section if those groups are shared by
-					 * active users, because it disables access for all members.
-					 */
-					$groups = API::UserGroup()->get([
-						'output' => ['usrgrpid'],
-						'selectUsers' => ['userid'],
-						'filter' => [],
-						'preservekeys' => false
-					]);
-
-					$user_groups = [];
-
-					foreach ($groups as $group) {
-						foreach ($group['users'] ?? [] as $group_user) {
-							if ((string) $group_user['userid'] === $userid) {
-								$user_groups[] = [
-									'usrgrpid' => $group['usrgrpid'],
-									'users_status' => 1
-								];
-								break;
-							}
-						}
-					}
-
-					if (!$user_groups) {
-						$errors[] = sprintf(
-							_('User %s has no resolvable user groups and was skipped.'),
-							$user['username']
-						);
-						continue;
-					}
-
-					/*
-					 * Group-level disabling is dangerous. The safer production
-					 * design is to create a dedicated disabled group per user,
-					 * move the user to it, and remove the original groups.
-					 *
-					 * This example reports the limitation instead of changing
-					 * shared groups automatically.
-					 */
-					$errors[] = sprintf(
-						_('User %s was not disabled because Zabbix disables users through user groups.'),
-						$user['username']
-					);
-				}
-				elseif ($operation === 'delete') {
-					$result = API::User()->delete([$userid]);
-
-					if (!$result) {
-						$errors[] = sprintf(_('Failed to delete user %s.'), $user['username']);
-						continue;
-					}
-
+			if ($operation === 'delete') {
+				try {
+					API::User()->delete([$userid]);
 					$processed[] = [
 						'userid' => $userid,
 						'username' => $user['username'],
@@ -152,12 +79,18 @@ class UserPolicyExecute extends CController {
 						'status' => 'completed'
 					];
 				}
+				catch (Throwable $e) {
+					$errors[] = sprintf(_('Delete failed for %s: %s'), $user['username'], $e->getMessage());
+				}
 			}
-			catch (\Throwable $e) {
+			else {
+				/*
+				 * Do not update users_status on a shared group. Zabbix applies
+				 * users_status at user-group level, not independently per user.
+				 */
 				$errors[] = sprintf(
-					_('User ID %s failed: %s'),
-					$userid,
-					$e->getMessage()
+					_('Disable skipped for %s: disabling is group-level in Zabbix.'),
+					$user['username']
 				);
 			}
 		}
@@ -173,10 +106,7 @@ class UserPolicyExecute extends CController {
 	private function isProtectedUser(array $user): bool {
 		$username = strtolower((string) $user['username']);
 
-		if (in_array($username, ['admin', 'guest'], true)) {
-			return true;
-		}
-
-		return ($user['role']['type'] ?? null) == USER_TYPE_SUPER_ADMIN;
+		return in_array($username, ['admin', 'guest'], true)
+			|| (($user['role']['type'] ?? null) == USER_TYPE_SUPER_ADMIN);
 	}
 }
