@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\mwcalpro;
+namespace Modules\UserPolicy;
 
 use Zabbix\Core\CModule;
 use APP;
@@ -10,10 +10,10 @@ class Module extends CModule {
 
     public function init(): void {
         APP::Component()->get('menu.main')
-            ->findOrAdd(_('Reports'))
+            ->findOrAdd(_('Users'))
                 ->getSubmenu()
-                    ->insertAfter(_('Notification'),
-                        (new CMenuItem(_('Maintenance Calendar')))->setAction('maintenance.calendar')
+                    ->insertAfter(_('Authentication'),
+                        (new CMenuItem(_('User Mgmt')))->setAction('user.policy')
                     );
     }
 }
