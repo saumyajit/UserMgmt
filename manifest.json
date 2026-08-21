@@ -1,22 +1,20 @@
 {
     "manifest_version": 2.0,
     "id": "mwcalpro",
-    "name": "Maintenance Window Calendar",
+    "name": "User Management in Zabbix",
     "version": "2.2.0",
     "author": "Saumyajit Pramanik",
-    "namespace": "mwcalpro",
+    "namespace": "UserPolicy",
     "url": "https://www.zabbix.com/",
-    "description": "Maintenance Window Details in Zabbix in a Calendar View",
+    "description": "Managing users in Zabbix effectively",
     "actions": {
-        "maintenance.calendar": {
-            "class": "MaintenanceCalendar",
-            "view": "maintenance"
+        "user.policy": {
+            "class": "UserPolicy",
+            "layout": "layout.htmlpage"
         },
-        "maintenance.deletes": {
-            "class": "MaintenanceDeleteAction"
-        },
-        "maintenance.updates": {
-            "class": "MaintenanceUpdateAction"
+        "user.policy.execute": {
+            "class": "UserPolicyExecute",
+            "layout": "layout.htmlpage"
         }
     }
 }
