@@ -23,22 +23,37 @@ class UserPolicy extends CController {
 	}
 
 	protected function checkPermissions(): bool {
-		return $this->getUserType() == USER_TYPE_SUPER_ADMIN;
+		return CWebUser::getType() >= USER_TYPE_ZABBIX_ADMIN;
 	}
 
 	protected function doAction(): void {
 		$disable_days = max(1, $this->getInput('disable_days', 45));
 		$delete_days = max($disable_days + 1, $this->getInput('delete_days', 90));
 		$now = time();
-		$disable_before = $now - $disable_days * 86400;
-		$delete_before = $now - $delete_days * 86400;
+		$disable_before = $now - ($disable_days * 86400);
+		$delete_before = $now - ($delete_days * 86400);
 
 		$users = API::User()->get([
 			'output' => [
-				'userid', 'username', 'name', 'surname', 'attempt_clock', 'roleid'
+				'userid',
+				'username',
+				'name',
+				'surname',
+				'attempt_clock',
+				'roleid'
 			],
-			'selectRole' => ['roleid', 'name', 'type', 'readonly'],
-			'selectUsrgrps' => ['usrgrpid', 'name', 'users_status', 'gui_access'],
+			'selectRole' => [
+				'roleid',
+				'name',
+				'type',
+				'readonly'
+			],
+			'selectUsrgrps' => [
+				'usrgrpid',
+				'name',
+				'users_status',
+				'gui_access'
+			],
 			'sortfield' => 'username',
 			'sortorder' => 'ASC'
 		]);
@@ -91,7 +106,7 @@ class UserPolicy extends CController {
 			if ($is_disabled && $action === 'disable') {
 				$action = 'none';
 				$decision = _('Already disabled');
-				$reason = _('The user is already disabled through its user-group access.');
+				$reason = _('The user is already disabled through user-group access.');
 			}
 
 			$rows[] = [
@@ -112,6 +127,9 @@ class UserPolicy extends CController {
 			'users' => $rows,
 			'disable_days' => $disable_days,
 			'delete_days' => $delete_days,
+			'can_edit' => CWebUser::getType() >= USER_TYPE_ZABBIX_ADMIN,
+			'can_delete' => CWebUser::getType() == USER_TYPE_SUPER_ADMIN,
+			'user_type' => CWebUser::getType(),
 			'generated_at' => $now
 		]));
 	}
@@ -135,7 +153,9 @@ class UserPolicy extends CController {
 	private function getLastActivityTime(string $userid): ?int {
 		$records = API::AuditLog()->get([
 			'output' => ['clock'],
-			'filter' => ['userid' => $userid],
+			'filter' => [
+				'userid' => $userid
+			],
 			'sortfield' => 'clock',
 			'sortorder' => 'DESC',
 			'limit' => 1
