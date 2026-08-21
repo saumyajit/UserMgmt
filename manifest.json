@@ -1,0 +1,22 @@
+{
+    "manifest_version": 2.0,
+    "id": "mwcalpro",
+    "name": "Maintenance Window Calendar",
+    "version": "2.2.0",
+    "author": "Saumyajit Pramanik",
+    "namespace": "mwcalpro",
+    "url": "https://www.zabbix.com/",
+    "description": "Maintenance Window Details in Zabbix in a Calendar View",
+    "actions": {
+        "maintenance.calendar": {
+            "class": "MaintenanceCalendar",
+            "view": "maintenance"
+        },
+        "maintenance.deletes": {
+            "class": "MaintenanceDeleteAction"
+        },
+        "maintenance.updates": {
+            "class": "MaintenanceUpdateAction"
+        }
+    }
+}
