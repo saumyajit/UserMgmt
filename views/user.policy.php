@@ -1,13 +1,14 @@
 <?php
 
-use CTag;
+/**
+ * @var CView $this
+ * @var array $data
+ */
 
-?>
-
-<div class="wrapper">
-	<h1><?= htmlspecialchars($data['title']) ?></h1>
-
-	<div class="msg-good">
-		<?= htmlspecialchars($data['message']) ?>
-	</div>
-</div>
+(new CHtmlPage())
+	->setTitle($data['title'])
+	->addItem(
+		(new CDiv($data['message']))
+			->addClass(ZBX_STYLE_MSG_GOOD)
+	)
+	->show();
