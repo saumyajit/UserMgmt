@@ -7,12 +7,16 @@ use CControllerResponseData;
 
 class UserPolicy extends CController {
 
+	public function init(): void {
+		$this->disableCsrfValidation();
+	}
+
 	protected function checkInput(): bool {
 		return true;
 	}
 
 	protected function checkPermissions(): bool {
-		return true;
+		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
 
 	protected function doAction(): void {
@@ -21,9 +25,6 @@ class UserPolicy extends CController {
 			'message' => _('User Management module is working successfully.')
 		];
 
-		$response = new CControllerResponseData($data);
-		$response->setTitle(_('User Management'));
-
-		$this->setResponse($response);
+		$this->setResponse(new CControllerResponseData($data));
 	}
 }
