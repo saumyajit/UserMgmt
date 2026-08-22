@@ -2,6 +2,7 @@
 
 namespace Modules\UserMgmt\Actions;
 
+use API;
 use CController;
 use CControllerResponseData;
 
@@ -20,9 +21,21 @@ class UserPolicy extends CController {
 	}
 
 	protected function doAction(): void {
+		$users = API::User()->get([
+			'output' => [
+				'userid',
+				'username',
+				'name',
+				'surname',
+				'roleid'
+			],
+			'sortfield' => 'username',
+			'sortorder' => ZBX_SORT_UP
+		]);
+
 		$data = [
 			'title' => _('User Management'),
-			'message' => _('User Management module is working successfully.')
+			'users' => $users
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
