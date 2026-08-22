@@ -33,9 +33,21 @@ class UserPolicy extends CController {
 			'sortorder' => ZBX_SORT_UP
 		]);
 
+		$auditlog = API::AuditLog()->get([
+			'output' => 'extend',
+			'sortfield' => 'clock',
+			'sortorder' => ZBX_SORT_DOWN,
+			'filter' => [
+				'action' => 0,
+				'resourcetype' => 0
+			],
+			'limit' => 1
+		]);
+
 		$data = [
 			'title' => _('User Management'),
-			'users' => $users
+			'users' => $users,
+			'auditlog' => $auditlog
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
