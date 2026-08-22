@@ -1,6 +1,6 @@
 <?php
 
-namespace Modules\UserPolicy;
+namespace Modules\UserMgmt;
 
 use Zabbix\Core\CModule;
 use APP;
