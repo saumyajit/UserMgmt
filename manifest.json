@@ -2,11 +2,11 @@
     "manifest_version": 2.0,
     "id": "usermgmt",
     "name": "User Management in Zabbix",
-    "version": "1.0",
+    "version": "1.1",
     "author": "Saumyajit Pramanik",
     "namespace": "UserMgmt",
     "url": "https://www.zabbix.com/",
-    "description": "Managing users in Zabbix effectively",
+    "description": "Identify inactive Zabbix accounts and manage their lifecycle against a configurable policy.",
     "actions": {
         "user.policy": {
             "class": "UserPolicy",
@@ -15,7 +15,7 @@
         },
         "user.policy.execute": {
             "class": "UserPolicyExecute",
-            "layout": "layout.htmlpage"
+            "layout": "layout.json"
         }
     }
 }
