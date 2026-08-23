@@ -7,14 +7,13 @@
 $config = $data['config'];
 $summary = $data['summary'];
 
-/*
- * ------------------------------------------------------------
- * Styles (encode=false — CTag('style', true, ...) HTML-escapes
- * the CSS and silently breaks all layout; see module notes)
- * ------------------------------------------------------------
- */
-$css = <<<CSS
-.umg-header p { margin: 4px 0 0 0; color: #6b7280; }
+function umg_esc($v) {
+	return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+}
+?>
+<h1><?= umg_esc($data['title']) ?></h1>
+
+<style>
 .umg-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
 .umg-card { background: #fff; border: 1px solid #d9dde3; border-radius: 4px; padding: 16px; }
 .umg-card-title { color: #6b7280; font-size: 12px; margin-bottom: 8px; }
@@ -25,7 +24,7 @@ $css = <<<CSS
 .umg-filter { display: flex; flex-direction: column; gap: 5px; }
 .umg-filter label { font-size: 11px; color: #5f6b78; }
 .umg-filter select, .umg-filter input { height: 30px; border: 1px solid #c7cdd4; border-radius: 3px; padding: 0 8px; min-width: 160px; }
-.umg-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.umg-table { width: 100%; border-collapse: collapse; }
 .umg-table th { background: #f6f7f9; text-align: left; padding: 8px 10px; font-size: 12px; color: #4b5563; border-bottom: 1px solid #d9dde3; white-space: nowrap; }
 .umg-table td { padding: 8px 10px; border-bottom: 1px solid #e7e9ec; font-size: 13px; vertical-align: middle; }
 .umg-table tr:hover { background: #fafbfc; }
@@ -47,91 +46,83 @@ $css = <<<CSS
 .umg-modal textarea, .umg-modal input[type=text] { width: 100%; box-sizing: border-box; margin-top: 6px; margin-bottom: 14px; padding: 8px; border: 1px solid #c7cdd4; border-radius: 3px; }
 .umg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .umg-row-hidden { display: none !important; }
-.umg-pending { opacity: 0.65; }
-CSS;
+button.umg-btn { height: 30px; border: 1px solid #b8bec6; background: #fff; border-radius: 3px; padding: 0 14px; cursor: pointer; font-size: 13px; }
+button.umg-btn:hover { background: #f0f2f5; }
+button.umg-btn-danger { background: #d94b4b; border-color: #d94b4b; color: #fff; }
+button.umg-btn-danger:hover { background: #c43e3e; }
+</style>
 
-$style_tag = new CTag('style', false, $css);
+<div class="umg-cards">
+	<div class="umg-card">
+		<div class="umg-card-title"><?= _('Total Users') ?></div>
+		<div class="umg-card-value"><?= umg_esc($summary['total']) ?></div>
+	</div>
+	<div class="umg-card">
+		<div class="umg-card-title"><?= _('Never Logged In') ?></div>
+		<div class="umg-card-value"><?= umg_esc($summary['never_logged_in']) ?></div>
+	</div>
+	<div class="umg-card">
+		<div class="umg-card-title"><?= _('Inactive Over Threshold') ?></div>
+		<div class="umg-card-value"><?= umg_esc($summary['inactive_over_threshold']) ?></div>
+	</div>
+	<div class="umg-card">
+		<div class="umg-card-title"><?= _('Recommended Disable') ?></div>
+		<div class="umg-card-value"><?= umg_esc($summary['recommended_disable']) ?></div>
+	</div>
+</div>
 
-/*
- * ------------------------------------------------------------
- * Summary cards
- * ------------------------------------------------------------
- */
-$cards = (new CDiv())
-	->addClass('umg-cards')
-	->addItem((new CDiv())->addClass('umg-card')->addItem([
-		(new CDiv(_('Total Users')))->addClass('umg-card-title'),
-		(new CDiv((string) $summary['total']))->addClass('umg-card-value')
-	]))
-	->addItem((new CDiv())->addClass('umg-card')->addItem([
-		(new CDiv(_('Never Logged In')))->addClass('umg-card-title'),
-		(new CDiv((string) $summary['never_logged_in']))->addClass('umg-card-value')
-	]))
-	->addItem((new CDiv())->addClass('umg-card')->addItem([
-		(new CDiv(_('Inactive Over Threshold')))->addClass('umg-card-title'),
-		(new CDiv((string) $summary['inactive_over_threshold']))->addClass('umg-card-value')
-	]))
-	->addItem((new CDiv())->addClass('umg-card')->addItem([
-		(new CDiv(_('Recommended Disable')))->addClass('umg-card-title'),
-		(new CDiv((string) $summary['recommended_disable']))->addClass('umg-card-value')
-	]));
+<div class="umg-panel">
+	<h2><?= _('Filter Users') ?></h2>
+	<div class="umg-filter-row">
+		<div class="umg-filter">
+			<label><?= _('User') ?></label>
+			<input type="text" id="umg-filter-username" placeholder="<?= _('Username') ?>">
+		</div>
+		<div class="umg-filter">
+			<label><?= _('Activity') ?></label>
+			<select id="umg-filter-activity">
+				<option value=""><?= _('All Users') ?></option>
+				<option value="never_logged_in"><?= _('Never Logged In') ?></option>
+				<option value="inactive"><?= _('Inactive') ?></option>
+				<option value="active"><?= _('Active') ?></option>
+				<option value="new_account"><?= _('New Account') ?></option>
+			</select>
+		</div>
+		<div class="umg-filter">
+			<label><?= _('Recommendation') ?></label>
+			<select id="umg-filter-recommendation">
+				<option value=""><?= _('All') ?></option>
+				<option value="disable"><?= _('Disable') ?></option>
+				<option value="no_action"><?= _('No Action') ?></option>
+			</select>
+		</div>
+		<button type="button" class="umg-btn" id="umg-filter-reset"><?= _('Reset') ?></button>
+	</div>
+</div>
 
-/*
- * ------------------------------------------------------------
- * Filters
- * ------------------------------------------------------------
- */
-$select_activity = new CTag('select', false, [
-	new CTag('option', false, _('All Users')),
-	(new CTag('option', false, _('Never Logged In')))->setAttribute('value', 'never_logged_in'),
-	(new CTag('option', false, _('Inactive')))->setAttribute('value', 'inactive'),
-	(new CTag('option', false, _('Active')))->setAttribute('value', 'active'),
-	(new CTag('option', false, _('New Account')))->setAttribute('value', 'new_account')
-]);
-$select_activity->setId('umg-filter-activity');
+<div class="umg-panel">
+	<div class="umg-results-header">
+		<h2><?= _('Inactive User Review') ?></h2>
+		<span id="umg-match-count"></span>
+	</div>
 
-$select_recommendation = new CTag('select', false, [
-	new CTag('option', false, _('All')),
-	(new CTag('option', false, _('Disable')))->setAttribute('value', 'disable'),
-	(new CTag('option', false, _('No Action')))->setAttribute('value', 'no_action')
-]);
-$select_recommendation->setId('umg-filter-recommendation');
-
-$input_username = (new CTag('input', false))
-	->setAttribute('type', 'text')
-	->setAttribute('placeholder', _('Username'))
-	->setId('umg-filter-username');
-
-$filters = (new CDiv())->addClass('umg-panel')->addItem([
-	new CTag('h2', false, _('Filter Users')),
-	(new CDiv())->addClass('umg-filter-row')->addItem([
-		(new CDiv())->addClass('umg-filter')->addItem([new CTag('label', false, _('User')), $input_username]),
-		(new CDiv())->addClass('umg-filter')->addItem([new CTag('label', false, _('Activity')), $select_activity]),
-		(new CDiv())->addClass('umg-filter')->addItem([new CTag('label', false, _('Recommendation')), $select_recommendation]),
-		(new CButton('umg-filter-reset', _('Reset')))
-	])
-]);
-
-/*
- * ------------------------------------------------------------
- * Results table
- * ------------------------------------------------------------
- */
-$thead = new CTag('thead', false, new CTag('tr', false, [
-	new CTag('th', false, (new CCheckBox('umg-select-all'))),
-	new CTag('th', false, _('User')),
-	new CTag('th', false, _('Account Created')),
-	new CTag('th', false, _('Last Login')),
-	new CTag('th', false, _('Account Age')),
-	new CTag('th', false, _('Inactive For')),
-	new CTag('th', false, _('Activity')),
-	new CTag('th', false, _('Recommendation')),
-	new CTag('th', false, _('Action'))
-]));
-
-$rows = [];
-
-foreach ($data['users'] as $user) {
+	<table class="umg-table" id="umg-table">
+		<thead>
+			<tr>
+				<th><input type="checkbox" id="umg-select-all"></th>
+				<th><?= _('User') ?></th>
+				<th><?= _('Account Created') ?></th>
+				<th><?= _('Last Login') ?></th>
+				<th><?= _('Account Age') ?></th>
+				<th><?= _('Inactive For') ?></th>
+				<th><?= _('Activity') ?></th>
+				<th><?= _('Recommendation') ?></th>
+				<th><?= _('Action') ?></th>
+			</tr>
+		</thead>
+		<tbody>
+<?php foreach ($data['users'] as $user): ?>
+<?php
 	$creation_str = $user['creation_clock'] !== null
 		? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['creation_clock'])
 		: _('Not found');
@@ -140,141 +131,84 @@ foreach ($data['users'] as $user) {
 		? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['last_login_clock'])
 		: _('Never');
 
-	$account_age = $user['creation_age_days'] !== null
-		? _n('%1$s day', '%1$s days', $user['creation_age_days'])
-		: '—';
+	$account_age = $user['creation_age_days'] !== null ? $user['creation_age_days'] . ' ' . _('days') : '—';
+	$inactive_for = $user['last_login_age_days'] !== null ? $user['last_login_age_days'] . ' ' . _('days') : '—';
 
-	$inactive_for = $user['last_login_age_days'] !== null
-		? _n('%1$s day', '%1$s days', $user['last_login_age_days'])
-		: '—';
+	$activity_class = 'umg-badge-ok';
+	$activity_label = _('Active');
+	if ($user['reason'] === 'never_logged_in') { $activity_class = 'umg-badge-danger'; $activity_label = _('Never Logged In'); }
+	elseif ($user['reason'] === 'inactive') { $activity_class = 'umg-badge-danger'; $activity_label = _('Inactive'); }
+	elseif ($user['reason'] === 'new_account') { $activity_class = 'umg-badge-info'; $activity_label = _('New Account'); }
 
-	switch ($user['reason']) {
-		case 'never_logged_in':
-			$activity_badge = (new CSpan(_('Never Logged In')))->addClass('umg-badge umg-badge-danger');
-			break;
-		case 'inactive':
-			$activity_badge = (new CSpan(_('Inactive')))->addClass('umg-badge umg-badge-danger');
-			break;
-		case 'new_account':
-			$activity_badge = (new CSpan(_('New Account')))->addClass('umg-badge umg-badge-info');
-			break;
-		default:
-			$activity_badge = (new CSpan(_('Active')))->addClass('umg-badge umg-badge-ok');
-	}
+	if ($user['pending_approval']) { $rec_class = 'umg-badge-warning'; $rec_label = _('Pending Approval'); }
+	elseif ($user['recommendation'] === 'disable') { $rec_class = 'umg-badge-danger'; $rec_label = _('Disable'); }
+	else { $rec_class = 'umg-badge-ok'; $rec_label = _('No Action'); }
 
-	if ($user['pending_approval']) {
-		$rec_badge = (new CSpan(_('Pending Approval')))->addClass('umg-badge umg-badge-warning');
-	}
-	elseif ($user['recommendation'] === 'disable') {
-		$rec_badge = (new CSpan(_('Disable')))->addClass('umg-badge umg-badge-danger');
-	}
-	else {
-		$rec_badge = (new CSpan(_('No Action')))->addClass('umg-badge umg-badge-ok');
-	}
+	$can_act = ($user['recommendation'] === 'disable' && !$user['pending_approval']);
+?>
+			<tr data-userid="<?= umg_esc($user['userid']) ?>" data-username="<?= umg_esc(mb_strtolower($user['username'])) ?>" data-activity="<?= umg_esc($user['reason']) ?>" data-recommendation="<?= umg_esc($user['recommendation']) ?>">
+				<td><?php if ($can_act): ?><input type="checkbox" class="umg-row-checkbox"><?php endif; ?></td>
+				<td>
+					<div class="umg-username"><?= umg_esc($user['username']) ?></div>
+					<div class="umg-subtext"><?= _('User ID:') ?> <?= umg_esc($user['userid']) ?></div>
+				</td>
+				<td><?= umg_esc($creation_str) ?></td>
+				<td><?= umg_esc($login_str) ?></td>
+				<td><?= umg_esc($account_age) ?></td>
+				<td><?= umg_esc($inactive_for) ?></td>
+				<td><span class="umg-badge <?= $activity_class ?>"><?= umg_esc($activity_label) ?></span></td>
+				<td><span class="umg-badge <?= $rec_class ?>"><?= umg_esc($rec_label) ?></span></td>
+				<td>
+<?php if ($can_act): ?>
+					<button type="button" class="umg-btn umg-btn-danger umg-row-disable-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Disable') ?></button>
+<?php else: ?>
+					—
+<?php endif; ?>
+				</td>
+			</tr>
+<?php endforeach; ?>
+		</tbody>
+	</table>
 
-	if ($user['recommendation'] === 'disable' && !$user['pending_approval']) {
-		$action_cell = (new CButton('', _('Disable')))
-			->addClass('umg-row-disable-btn')
-			->setAttribute('data-userid', $user['userid'])
-			->setAttribute('data-username', $user['username']);
-	}
-	else {
-		$action_cell = '—';
-	}
+	<div class="umg-footer">
+		<div class="umg-card-title" id="umg-footer-info"></div>
+		<div class="umg-bulk-actions">
+			<button type="button" class="umg-btn" id="umg-flag-selected"><?= _('Flag Selected for Approval') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected"><?= _('Disable Selected Users') ?></button>
+		</div>
+	</div>
+</div>
 
-	$row = new CTag('tr', false, [
-		new CTag('td', false, ($user['recommendation'] === 'disable' && !$user['pending_approval'])
-			? (new CCheckBox('umg-row-select[]', $user['userid']))->addClass('umg-row-checkbox')
-			: ''),
-		new CTag('td', false, [
-			(new CDiv($user['username']))->addClass('umg-username'),
-			(new CDiv(_('User ID:') . ' ' . $user['userid']))->addClass('umg-subtext')
-		]),
-		new CTag('td', false, $creation_str),
-		new CTag('td', false, $login_str),
-		new CTag('td', false, $account_age),
-		new CTag('td', false, $inactive_for),
-		new CTag('td', false, $activity_badge),
-		new CTag('td', false, $rec_badge),
-		new CTag('td', false, $action_cell)
-	]);
+<div class="umg-panel">
+	<h2><?= _('Inactivity Policy (configurable)') ?></h2>
+	<div class="umg-filter-row">
+		<div class="umg-filter">
+			<label><?= _('Minimum Account Age (days)') ?></label>
+			<input type="number" min="0" id="umg-cfg-min-age" value="<?= umg_esc($config['min_account_age_days']) ?>">
+		</div>
+		<div class="umg-filter">
+			<label><?= _('Inactivity Threshold (days)') ?></label>
+			<input type="number" min="0" id="umg-cfg-threshold" value="<?= umg_esc($config['inactivity_threshold_days']) ?>">
+		</div>
+		<button type="button" class="umg-btn" id="umg-cfg-save"><?= _('Save Policy') ?></button>
+	</div>
+</div>
 
-	$row->setAttribute('data-userid', $user['userid']);
-	$row->setAttribute('data-username', mb_strtolower($user['username']));
-	$row->setAttribute('data-activity', $user['reason']);
-	$row->setAttribute('data-recommendation', $user['recommendation']);
+<div class="umg-modal-backdrop" id="umg-modal-backdrop">
+	<div class="umg-modal">
+		<h3><?= _('Disable Users') ?></h3>
+		<div class="umg-card-title" id="umg-modal-userlist"></div>
+		<label><?= _('Request No. / Comment (required to disable immediately)') ?></label>
+		<textarea rows="3" id="umg-modal-comment"></textarea>
+		<div class="umg-modal-actions">
+			<button type="button" class="umg-btn" id="umg-modal-cancel"><?= _('Cancel') ?></button>
+			<button type="button" class="umg-btn" id="umg-modal-flag"><?= _('Flag for Approval') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-modal-confirm"><?= _('Disable Now') ?></button>
+		</div>
+	</div>
+</div>
 
-	$rows[] = $row;
-}
-
-$table = (new CTag('table', false, [$thead, new CTag('tbody', false, $rows)]))
-	->addClass('umg-table')
-	->setId('umg-table');
-
-$results_panel = (new CDiv())->addClass('umg-panel')->addItem([
-	(new CDiv())->addClass('umg-results-header')->addItem([
-		new CTag('h2', false, _('Inactive User Review')),
-		(new CTag('span', false, ''))->setId('umg-match-count')
-	]),
-	$table,
-	(new CDiv())->addClass('umg-footer')->addItem([
-		(new CDiv(''))->setId('umg-footer-info')->addClass('umg-card-title'),
-		(new CDiv())->addClass('umg-bulk-actions')->addItem([
-			(new CButton('umg-flag-selected', _('Flag Selected for Approval'))),
-			(new CButton('umg-disable-selected', _('Disable Selected Users')))->addClass('btn-alt')
-		])
-	])
-]);
-
-/*
- * ------------------------------------------------------------
- * Policy panel (thresholds are configurable)
- * ------------------------------------------------------------
- */
-$policy_panel = (new CDiv())->addClass('umg-panel')->addItem([
-	new CTag('h2', false, _('Inactivity Policy (configurable)')),
-	(new CDiv())->addClass('umg-filter-row')->addItem([
-		(new CDiv())->addClass('umg-filter')->addItem([
-			new CTag('label', false, _('Minimum Account Age (days)')),
-			(new CTag('input', false))->setAttribute('type', 'number')->setAttribute('min', '0')
-				->setAttribute('value', (string) $config['min_account_age_days'])->setId('umg-cfg-min-age')
-		]),
-		(new CDiv())->addClass('umg-filter')->addItem([
-			new CTag('label', false, _('Inactivity Threshold (days)')),
-			(new CTag('input', false))->setAttribute('type', 'number')->setAttribute('min', '0')
-				->setAttribute('value', (string) $config['inactivity_threshold_days'])->setId('umg-cfg-threshold')
-		]),
-		(new CButton('umg-cfg-save', _('Save Policy')))
-	])
-]);
-
-/*
- * ------------------------------------------------------------
- * Disable confirmation modal
- * ------------------------------------------------------------
- */
-$modal = (new CDiv())->addClass('umg-modal-backdrop')->setId('umg-modal-backdrop')->addItem(
-	(new CDiv())->addClass('umg-modal')->addItem([
-		new CTag('h3', false, _('Disable Users')),
-		(new CTag('div', false, ''))->setId('umg-modal-userlist')->addClass('umg-card-title'),
-		new CTag('label', false, _('Request No. / Comment (required to disable immediately)')),
-		(new CTag('textarea', false))->setAttribute('rows', '3')->setId('umg-modal-comment'),
-		(new CDiv())->addClass('umg-modal-actions')->addItem([
-			(new CButton('umg-modal-cancel', _('Cancel'))),
-			(new CButton('umg-modal-flag', _('Flag for Approval'))),
-			(new CButton('umg-modal-confirm', _('Disable Now')))->addClass('btn-alt')
-		])
-	])
-);
-
-/*
- * ------------------------------------------------------------
- * Client-side behaviour (encode=false; filtering, selection,
- * modal, AJAX to user.policy.execute / user.policy.config —
- * both controllers have CSRF disabled so no token plumbing).
- * ------------------------------------------------------------
- */
-$js = <<<'JS'
+<script>
 (function () {
 	var table = document.getElementById('umg-table');
 	var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
@@ -309,14 +243,12 @@ $js = <<<'JS'
 	});
 
 	var selectAll = document.getElementById('umg-select-all');
-	if (selectAll) {
-		selectAll.addEventListener('change', function () {
-			table.querySelectorAll('.umg-row-checkbox').forEach(function (cb) {
-				var row = cb.closest('tr');
-				if (!row.classList.contains('umg-row-hidden')) cb.checked = selectAll.checked;
-			});
+	selectAll.addEventListener('change', function () {
+		table.querySelectorAll('.umg-row-checkbox').forEach(function (cb) {
+			var row = cb.closest('tr');
+			if (!row.classList.contains('umg-row-hidden')) cb.checked = selectAll.checked;
 		});
-	}
+	});
 
 	function getSelectedUserIds() {
 		return Array.prototype.slice.call(table.querySelectorAll('.umg-row-checkbox:checked'))
@@ -407,19 +339,4 @@ $js = <<<'JS'
 
 	applyFilters();
 })();
-JS;
-
-$script_tag = new CTag('script', false, $js);
-
-(new CHtmlPage())
-	->setTitle($data['title'])
-	->addItem([
-		$style_tag,
-		$cards,
-		$filters,
-		$results_panel,
-		$policy_panel,
-		$modal,
-		$script_tag
-	])
-	->show();
+</script>
