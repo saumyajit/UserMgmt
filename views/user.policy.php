@@ -267,8 +267,14 @@ $css = <<<CSS
 .umg-filter { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
 .umg-filter label { font-size: 11px; color: #5f6b78; }
 .umg-results-header { padding: 14px 18px; border-bottom: 1px solid #d9dde3; display: flex; justify-content: space-between; align-items: center; }
-.umg-username { font-weight: 600; }
-.umg-subtext { font-size: 11px; color: #7b8490; }
+.umg-results { overflow-x: auto; }
+table.umg-table { width: 100%; table-layout: auto; border-collapse: collapse; }
+table.umg-table th, table.umg-table td { padding: 10px 12px; border-bottom: 1px solid #e7e9ec; text-align: left; vertical-align: middle; white-space: nowrap; }
+table.umg-table th { background: #f6f7f9; font-size: 12px; color: #4b5563; font-weight: 600; }
+table.umg-table td:nth-child(2) { white-space: normal; min-width: 160px; }
+table.umg-table .umg-col-check { width: 34px; }
+.umg-username { font-weight: 600; display: block; }
+.umg-subtext { font-size: 11px; color: #7b8490; display: block; margin-top: 2px; }
 .umg-status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
 .umg-status-danger { background: #fde8e8; color: #b42323; }
 .umg-status-warning { background: #fff4d6; color: #8a6200; }
@@ -446,12 +452,15 @@ JS;
 (new CHtmlPage())
 	->setTitle($data['title'])
 	->addItem(
-		(new CTag('style', true, $css))
+		// encode = false: this must go out as raw CSS, not HTML-escaped text.
+		(new CTag('style', false, $css))
 	)
 	->addItem($cards)
 	->addItem($filters)
 	->addItem($results)
 	->addItem($policy_panel)
 	->addItem($modal)
-	->addItem((new CTag('script', true, $js)))
+	// encode = false: same deal for the script block — escaping it silently
+	// turned every button/filter/modal handler into dead markup.
+	->addItem((new CTag('script', false, $js)))
 	->show();
