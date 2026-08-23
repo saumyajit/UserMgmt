@@ -53,7 +53,7 @@ class UserPolicy extends CController {
 				'status' => 0
 			],
 			'sortfield' => 'username',
-			'sortorder' => ZBX_SORT_UP
+			'sortorder' => 'DESC'
 		]);
 
 		/*
