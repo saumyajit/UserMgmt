@@ -171,26 +171,23 @@ class UserPolicy extends CController {
 
 			$account_old_enough = $creation_age_days !== null
 				&& $creation_age_days > $config['min_account_age_days'];
+			$account_age_unknown = $creation_age_days === null;
 
 			$never_logged_in = $last_login_clock === null;
 			$inactive_past_threshold = $last_login_age_days !== null
 				&& $last_login_age_days > $config['inactivity_threshold_days'];
 
-			if ($account_old_enough && $never_logged_in) {
+			if (($account_old_enough || $account_age_unknown) && ($never_logged_in || $inactive_past_threshold)) {
 				$recommendation = 'disable';
-				$reason = 'never_logged_in';
+				$reason = $never_logged_in ? 'never_logged_in' : 'inactive';
 			}
-			elseif ($account_old_enough && $inactive_past_threshold) {
-				$recommendation = 'disable';
-				$reason = 'inactive';
-			}
-			elseif (!$account_old_enough && $creation_age_days !== null) {
+			elseif (!$account_old_enough && !$account_age_unknown) {
 				$recommendation = 'no_action';
 				$reason = 'new_account';
 			}
 			else {
 				$recommendation = 'no_action';
-				$reason = $never_logged_in ? 'unknown_creation' : 'active';
+				$reason = 'active';
 			}
 
 			$user['creation_clock'] = $creation_clock;
