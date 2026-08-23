@@ -14,7 +14,7 @@ namespace Modules\UserMgmt\Lib;
 class CApprovalQueue {
 
 	private static function path(): string {
-		return __DIR__ . '/../data/approval_queue.json';
+		return __DIR__ . '/data/approval_queue.json';
 	}
 
 	private static function load(): array {
