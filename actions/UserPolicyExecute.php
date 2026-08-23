@@ -5,7 +5,7 @@ namespace Modules\UserMgmt\Actions;
 use API;
 use CController;
 use CControllerResponseData;
-use Modules\UserMgmt\Lib\CApprovalQueue;
+#use Modules\UserMgmt\Lib\CApprovalQueue;
 
 class UserPolicyExecute extends CController {
 
