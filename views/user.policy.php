@@ -326,7 +326,8 @@ $page->addItem(
 			.'account-age threshold. Login activity will be evaluated '
 			.'before any disable recommendation is made.'
 		)
-	);
+	)
+);
 
 $page->addItem(
 	$candidate_table
