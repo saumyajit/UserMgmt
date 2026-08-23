@@ -84,7 +84,7 @@ class UserPolicy extends CController {
 				'resourcetype' => 0
 			],
 			'sortfield' => 'clock',
-			'sortorder' => ZBX_SORT_DESC
+			'sortorder' => 'DESC'
 		]);
 
 		/*
