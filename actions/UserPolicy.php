@@ -23,7 +23,21 @@ class UserPolicy extends CController {
 	protected function doAction(): void {
 		/*
 		 * ------------------------------------------------------------
-		 * 1. Get all Zabbix users
+		 * Policy configuration
+		 * ------------------------------------------------------------
+		 */
+		$account_age_threshold = 60;
+
+		$current_time = time();
+
+		/*
+		 * ------------------------------------------------------------
+		 * 1. Get enabled Zabbix users
+		 *
+		 * status = 0 -> Enabled
+		 *
+		 * We don't need disabled accounts for the current policy
+		 * evaluation.
 		 * ------------------------------------------------------------
 		 */
 		$users = API::User()->get([
@@ -32,7 +46,11 @@ class UserPolicy extends CController {
 				'username',
 				'name',
 				'surname',
-				'roleid'
+				'roleid',
+				'status'
+			],
+			'filter' => [
+				'status' => 0
 			],
 			'sortfield' => 'username',
 			'sortorder' => ZBX_SORT_UP
@@ -42,13 +60,11 @@ class UserPolicy extends CController {
 		 * ------------------------------------------------------------
 		 * 2. Get user creation audit records
 		 *
-		 * action       = 0  -> Add
-		 * resourcetype = 0  -> User
+		 * action       = 0 -> Add
+		 * resourcetype = 0 -> User
 		 *
-		 * resourceid   = newly created user's userid
-		 * resourcename = newly created user's username
-		 * userid       = user who created the account
-		 * clock        = account creation time
+		 * resourceid   = created user's userid
+		 * clock        = creation timestamp
 		 * ------------------------------------------------------------
 		 */
 		$user_creation_logs = API::AuditLog()->get([
@@ -68,18 +84,14 @@ class UserPolicy extends CController {
 				'resourcetype' => 0
 			],
 			'sortfield' => 'clock',
-			'sortorder' => ZBX_SORT_DOWN
+			'sortorder' => ZBX_SORT_DESC
 		]);
 
 		/*
 		 * ------------------------------------------------------------
-		 * 3. Build:
+		 * 3. Build creation-time lookup
 		 *
 		 *     userid => creation timestamp
-		 *
-		 * Example:
-		 *
-		 *     744 => 1729154939
 		 * ------------------------------------------------------------
 		 */
 		$creation_times = [];
@@ -87,10 +99,6 @@ class UserPolicy extends CController {
 		foreach ($user_creation_logs as $audit) {
 			$userid = (string) $audit['resourceid'];
 
-			/*
-			 * Since records are sorted DESC, the first occurrence
-			 * is the latest creation record for that resource.
-			 */
 			if (!isset($creation_times[$userid])) {
 				$creation_times[$userid] = (int) $audit['clock'];
 			}
@@ -98,98 +106,85 @@ class UserPolicy extends CController {
 
 		/*
 		 * ------------------------------------------------------------
-		 * 4. Attach creation timestamp to each current user
+		 * 4. Identify accounts older than 60 days
+		 *
+		 * We deliberately filter here.
+		 *
+		 * Users younger than 60 days do not need login-history
+		 * evaluation according to the policy.
 		 * ------------------------------------------------------------
 		 */
-		foreach ($users as &$user) {
+		$candidate_users = [];
+
+		foreach ($users as $user) {
 			$userid = (string) $user['userid'];
 
-			$user['creation_clock'] = $creation_times[$userid] ?? null;
-		}
-		unset($user);
+			$creation_clock = $creation_times[$userid] ?? null;
 
-		/*
-		 * ------------------------------------------------------------
-		 * 5. Get recent successful login records
-		 *
-		 * action       = 8  -> Login
-		 * resourcetype = 0  -> User
-		 *
-		 * We are deliberately limiting this during the testing phase.
-		 * Once we confirm the exact login correlation, we will change
-		 * the retrieval strategy for the production implementation.
-		 * ------------------------------------------------------------
-		 */
-		$login_logs = API::AuditLog()->get([
-			'output' => [
-				'auditid',
-				'userid',
-				'username',
-				'clock',
-				'action',
-				'resourcetype',
-				'resourceid',
-				'resourcename',
-				'ip'
-			],
-			'filter' => [
-				'action' => 8,
-				'resourcetype' => 0
-			],
-			'sortfield' => 'clock',
-			'sortorder' => ZBX_SORT_DOWN,
-			'limit' => 50
-		]);
+			/*
+			 * If creation information cannot be found, don't
+			 * automatically classify the account as inactive.
+			 *
+			 * We will handle these separately as "Creation time
+			 * not found".
+			 */
+			if ($creation_clock === null) {
+				$user['creation_clock'] = null;
+				$user['account_age_days'] = null;
+				$user['candidate'] = false;
+				$user['candidate_reason'] = 'creation_time_not_found';
 
-		/*
-		 * ------------------------------------------------------------
-		 * 6. Build latest login information
-		 *
-		 * We are NOT yet using this to calculate the policy.
-		 *
-		 * We first want to verify that the userid/resourceid
-		 * relationship is correct in your environment.
-		 * ------------------------------------------------------------
-		 */
-		$last_login_times = [];
+				$candidate_users[] = $user;
 
-		foreach ($login_logs as $login) {
-			$userid = (string) $login['userid'];
+				continue;
+			}
 
-			if (!isset($last_login_times[$userid])) {
-				$last_login_times[$userid] = (int) $login['clock'];
+			$account_age_seconds = $current_time - $creation_clock;
+
+			$account_age_days = floor(
+				$account_age_seconds / 86400
+			);
+
+			$user['creation_clock'] = $creation_clock;
+			$user['account_age_days'] = $account_age_days;
+
+			/*
+			 * Candidate if account is at least 60 days old.
+			 */
+			if ($account_age_days >= $account_age_threshold) {
+				$user['candidate'] = true;
+				$user['candidate_reason'] = 'account_older_than_threshold';
+
+				$candidate_users[] = $user;
 			}
 		}
 
 		/*
 		 * ------------------------------------------------------------
-		 * 7. Attach last login timestamp to users
-		 * ------------------------------------------------------------
-		 */
-		foreach ($users as &$user) {
-			$userid = (string) $user['userid'];
-
-			$user['last_login_clock'] = $last_login_times[$userid] ?? null;
-		}
-		unset($user);
-
-		/*
-		 * ------------------------------------------------------------
-		 * 8. Send everything to the view
+		 * 5. Send data to view
 		 * ------------------------------------------------------------
 		 */
 		$data = [
 			'title' => _('User Management'),
 
-			'users' => $users,
+			/*
+			 * All enabled users.
+			 */
+			'total_users' => count($users),
 
-			'creation_logs' => $user_creation_logs,
+			/*
+			 * Only users requiring further investigation.
+			 */
+			'candidate_users' => $candidate_users,
 
+			/*
+			 * Useful during development/debugging.
+			 */
 			'creation_times' => $creation_times,
 
-			'login_logs' => $login_logs,
+			'account_age_threshold' => $account_age_threshold,
 
-			'last_login_times' => $last_login_times
+			'current_time' => $current_time
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
