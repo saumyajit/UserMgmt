@@ -5,254 +5,188 @@
  * @var array $data
  */
 
-$this->addJsFile('multiselect.js');
-
-$csrf_token = CCsrfTokenHelper::get('usermgmt');
-
 $policy = $data['policy'];
 $counts = $data['counts'];
 $filter = $data['filter'];
+
+function umg_select(string $name, array $options, string $selected): string {
+	$html = '<select name="' . htmlspecialchars($name) . '" class="umg-select">';
+	foreach ($options as $value => $label) {
+		$sel = ($value === $selected) ? ' selected' : '';
+		$html .= '<option value="' . htmlspecialchars($value) . '"' . $sel . '>' . htmlspecialchars($label) . '</option>';
+	}
+	return $html . '</select>';
+}
 
 /*
  * ------------------------------------------------------------
  * Summary cards
  * ------------------------------------------------------------
  */
-$cards = (new CDiv())
-	->addClass('umg-cards')
-	->addItem((new CDiv())
-		->addClass('umg-card')
-		->addItem([
-			(new CDiv(_('Total Users')))->addClass('umg-card-title'),
-			(new CDiv($data['all_users_count']))->addClass('umg-card-value'),
-			(new CDiv(_('Current Zabbix users')))->addClass('umg-card-desc')
-		]))
-	->addItem((new CDiv())
-		->addClass('umg-card')
-		->addItem([
-			(new CDiv(_('Never Logged In')))->addClass('umg-card-title'),
-			(new CDiv($counts['never_logged_in']))->addClass('umg-card-value'),
-			(new CDiv(_('No successful login on record')))->addClass('umg-card-desc')
-		]))
-	->addItem((new CDiv())
-		->addClass('umg-card')
-		->addItem([
-			(new CDiv(_s('Inactive > %1$d Days', $policy['inactivity_threshold_days'])))->addClass('umg-card-title'),
-			(new CDiv($counts['inactive_45']))->addClass('umg-card-value'),
-			(new CDiv(_('Logged in before, gone quiet since')))->addClass('umg-card-desc')
-		]))
-	->addItem((new CDiv())
-		->addClass('umg-card umg-card-highlight')
-		->addItem([
-			(new CDiv(_('Recommended Disable')))->addClass('umg-card-title'),
-			(new CDiv($counts['recommend_disable']))->addClass('umg-card-value'),
-			(new CDiv(_('Users meeting current policy')))->addClass('umg-card-desc')
-		]));
+$cards_html = '<div class="umg-cards">'
+	. '<div class="umg-card"><div class="umg-card-title">' . _('Total Users') . '</div>'
+	. '<div class="umg-card-value">' . (int) $data['all_users_count'] . '</div>'
+	. '<div class="umg-card-desc">' . _('Current Zabbix users') . '</div></div>'
+
+	. '<div class="umg-card"><div class="umg-card-title">' . _('Never Logged In') . '</div>'
+	. '<div class="umg-card-value">' . (int) $counts['never_logged_in'] . '</div>'
+	. '<div class="umg-card-desc">' . _('No successful login on record') . '</div></div>'
+
+	. '<div class="umg-card"><div class="umg-card-title">' . _s('Inactive > %1$d Days', $policy['inactivity_threshold_days']) . '</div>'
+	. '<div class="umg-card-value">' . (int) $counts['inactive_45'] . '</div>'
+	. '<div class="umg-card-desc">' . _('Logged in before, gone quiet since') . '</div></div>'
+
+	. '<div class="umg-card umg-card-highlight"><div class="umg-card-title">' . _('Recommended Disable') . '</div>'
+	. '<div class="umg-card-value">' . (int) $counts['recommend_disable'] . '</div>'
+	. '<div class="umg-card-desc">' . _('Users meeting current policy') . '</div></div>'
+	. '</div>';
 
 /*
  * ------------------------------------------------------------
  * Filters
  * ------------------------------------------------------------
  */
-$filters = (new CDiv())
-	->addClass('umg-filters')
-	->addItem((new CTag('h2', true, _('Filter Users'))))
-	->addItem((new CDiv())
-		->addClass('umg-filter-row')
-		->addItem([
-			(new CDiv())->addClass('umg-filter')->addItem([
-				new CLabel(_('User'), 'filter_username'),
-				(new CTextBox('filter_username', $filter['username']))->setAttribute('placeholder', _('Username'))
-			]),
-			(new CDiv())->addClass('umg-filter')->addItem([
-				new CLabel(_('Activity'), 'filter_activity'),
-				(new CSelect('filter_activity'))
-					->setValue($filter['activity'])
-					->addOptions(CSelect::createOptionsFromArray([
-						'all' => _('All Users'),
-						'never' => _('Never Logged In'),
-						'logged_in' => _('Logged In'),
-						'inactive' => _s('Inactive > %1$d Days', $policy['inactivity_threshold_days'])
-					]))
-			]),
-			(new CDiv())->addClass('umg-filter')->addItem([
-				new CLabel(_('Account Age'), 'filter_account_age'),
-				(new CSelect('filter_account_age'))
-					->setValue($filter['account_age'])
-					->addOptions(CSelect::createOptionsFromArray([
-						'all' => _('All'),
-						'gt60' => _s('> %1$d Days', $policy['min_account_age_days']),
-						'lt60' => _s('<= %1$d Days', $policy['min_account_age_days'])
-					]))
-			]),
-			(new CDiv())->addClass('umg-filter')->addItem([
-				new CLabel(_('Recommendation'), 'filter_recommendation'),
-				(new CSelect('filter_recommendation'))
-					->setValue($filter['recommendation'])
-					->addOptions(CSelect::createOptionsFromArray([
-						'all' => _('All'),
-						'disable' => _('Disable'),
-						'no_action' => _('No Action')
-					]))
-			]),
-			(new CDiv())->addClass('umg-filter')->addItem([
-				new CLabel(_('Status'), 'filter_status'),
-				(new CSelect('filter_status'))
-					->setValue($filter['status'])
-					->addOptions(CSelect::createOptionsFromArray([
-						'enabled' => _('Enabled'),
-						'disabled' => _('Disabled'),
-						'all' => _('All')
-					]))
-			]),
-			(new CSimpleButton(_('Apply')))->addClass('btn-primary')->setId('umg-filter-apply'),
-			(new CSimpleButton(_('Reset')))->setId('umg-filter-reset')
-		]));
+$filters_html = '<div class="umg-filters"><h2>' . _('Filter Users') . '</h2>'
+	. '<div class="umg-filter-row">'
+	. '<div class="umg-filter"><label>' . _('User') . '</label>'
+	. '<input type="text" name="filter_username" placeholder="' . _('Username') . '" value="' . htmlspecialchars($filter['username']) . '"></div>'
+
+	. '<div class="umg-filter"><label>' . _('Activity') . '</label>' . umg_select('filter_activity', [
+		'all' => _('All Users'), 'never' => _('Never Logged In'),
+		'logged_in' => _('Logged In'), 'inactive' => _s('Inactive > %1$d Days', $policy['inactivity_threshold_days'])
+	], $filter['activity']) . '</div>'
+
+	. '<div class="umg-filter"><label>' . _('Account Age') . '</label>' . umg_select('filter_account_age', [
+		'all' => _('All'), 'gt60' => _s('> %1$d Days', $policy['min_account_age_days']),
+		'lt60' => _s('<= %1$d Days', $policy['min_account_age_days'])
+	], $filter['account_age']) . '</div>'
+
+	. '<div class="umg-filter"><label>' . _('Recommendation') . '</label>' . umg_select('filter_recommendation', [
+		'all' => _('All'), 'disable' => _('Disable'), 'no_action' => _('No Action')
+	], $filter['recommendation']) . '</div>'
+
+	. '<div class="umg-filter"><label>' . _('Status') . '</label>' . umg_select('filter_status', [
+		'enabled' => _('Enabled'), 'disabled' => _('Disabled'), 'all' => _('All')
+	], $filter['status']) . '</div>'
+
+	. '<button type="button" class="btn-primary" id="umg-filter-apply">' . _('Apply') . '</button>'
+	. '<button type="button" id="umg-filter-reset">' . _('Reset') . '</button>'
+	. '</div></div>';
 
 /*
  * ------------------------------------------------------------
  * Results table
  * ------------------------------------------------------------
  */
-$table = (new CTable())
-	->addClass('umg-table')
-	->setHeader([
-		(new CColHeader(new CCheckBox('select_all')))->addClass('umg-col-check'),
-		_('User'),
-		_('Account Created'),
-		_('Last Login'),
-		_('Account Age'),
-		_('Inactive For'),
-		_('Activity'),
-		_('Recommendation'),
-		_('Action')
-	]);
-
+$rows_html = '';
 foreach ($data['users'] as $user) {
 	$creation_display = $user['creation_clock'] !== null
-		? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['creation_clock'])
-		: _('Not found');
+		? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['creation_clock']) : _('Not found');
 
 	$login_display = $user['last_login_clock'] !== null
 		? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['last_login_clock'])
-		: (new CSpan(_('Never')))->addClass('umg-status umg-status-warning');
+		: '<span class="umg-status umg-status-warning">' . _('Never') . '</span>';
 
-	$activity_badge = $user['last_login_clock'] === null
-		? (new CSpan(_('Never Logged In')))->addClass('umg-status umg-status-danger')
-		: ($user['inactive_days'] > $policy['inactivity_threshold_days']
-			? (new CSpan(_('Inactive')))->addClass('umg-status umg-status-danger')
-			: (new CSpan(_('Active')))->addClass('umg-status umg-status-ok'));
-
+	if ($user['last_login_clock'] === null) {
+		$activity_badge = '<span class="umg-status umg-status-danger">' . _('Never Logged In') . '</span>';
+	}
+	elseif ($user['inactive_days'] > $policy['inactivity_threshold_days']) {
+		$activity_badge = '<span class="umg-status umg-status-danger">' . _('Inactive') . '</span>';
+	}
+	else {
+		$activity_badge = '<span class="umg-status umg-status-ok">' . _('Active') . '</span>';
+	}
 	if ($user['account_age_days'] !== null && $user['account_age_days'] <= $policy['min_account_age_days']
 			&& $user['last_login_clock'] === null) {
-		$activity_badge = (new CSpan(_('New Account')))->addClass('umg-status umg-status-info');
+		$activity_badge = '<span class="umg-status umg-status-info">' . _('New Account') . '</span>';
 	}
-
-	$recommendation_badge = $user['recommendation'] === 'disable'
-		? (new CSpan(_('Disable')))->addClass('umg-status umg-status-danger')
-		: (new CSpan(_('No Action')))->addClass('umg-status umg-status-ok');
 
 	if ($user['is_disabled']) {
-		$recommendation_badge = (new CSpan(_('Already Disabled')))->addClass('umg-status umg-status-info');
+		$rec_badge = '<span class="umg-status umg-status-info">' . _('Already Disabled') . '</span>';
 	}
 	elseif ($user['pending_approval']) {
-		$recommendation_badge = (new CSpan(_('Pending Approval')))->addClass('umg-status umg-status-warning');
+		$rec_badge = '<span class="umg-status umg-status-warning">' . _('Pending Approval') . '</span>';
+	}
+	elseif ($user['recommendation'] === 'disable') {
+		$rec_badge = '<span class="umg-status umg-status-danger">' . _('Disable') . '</span>';
+	}
+	else {
+		$rec_badge = '<span class="umg-status umg-status-ok">' . _('No Action') . '</span>';
 	}
 
 	$action_cell = '—';
+	$checkbox_disabled = '';
 	if (!$user['is_disabled'] && !$user['pending_approval']) {
-		$action_cell = (new CSimpleButton(_('Disable')))
-			->addClass('btn-danger umg-row-disable')
-			->setAttribute('data-userid', $user['userid'])
-			->setAttribute('data-username', $user['username']);
+		$action_cell = '<button type="button" class="btn-danger umg-row-disable" '
+			. 'data-userid="' . (int) $user['userid'] . '" data-username="' . htmlspecialchars($user['username']) . '">'
+			. _('Disable') . '</button>';
+	}
+	else {
+		$checkbox_disabled = ' disabled';
 	}
 
-	$table->addRow([
-		(new CCheckBox('userids[' . $user['userid'] . ']'))
-			->setChecked(false)
-			->addClass('umg-row-check')
-			->setAttribute('data-userid', $user['userid'])
-			->setEnabled(!$user['is_disabled'] && !$user['pending_approval']),
-		(new CDiv())->addItem([
-			(new CDiv($user['username']))->addClass('umg-username'),
-			(new CDiv(_s('User ID: %1$s', $user['userid'])))->addClass('umg-subtext')
-		]),
-		$creation_display,
-		$login_display,
-		$user['account_age_days'] !== null ? _s('%1$d days', $user['account_age_days']) : '—',
-		$user['inactive_days'] !== null ? _s('%1$d days', $user['inactive_days']) : '—',
-		$activity_badge,
-		$recommendation_badge,
-		$action_cell
-	]);
+	$rows_html .= '<tr>'
+		. '<td class="umg-col-check"><input type="checkbox" class="umg-row-check" data-userid="' . (int) $user['userid'] . '"' . $checkbox_disabled . '></td>'
+		. '<td><span class="umg-username">' . htmlspecialchars($user['username']) . '</span>'
+		. '<span class="umg-subtext">' . _s('User ID: %1$s', $user['userid']) . '</span></td>'
+		. '<td>' . $creation_display . '</td>'
+		. '<td>' . $login_display . '</td>'
+		. '<td>' . ($user['account_age_days'] !== null ? _s('%1$d days', $user['account_age_days']) : '—') . '</td>'
+		. '<td>' . ($user['inactive_days'] !== null ? _s('%1$d days', $user['inactive_days']) : '—') . '</td>'
+		. '<td>' . $activity_badge . '</td>'
+		. '<td>' . $rec_badge . '</td>'
+		. '<td>' . $action_cell . '</td>'
+		. '</tr>';
 }
 
-$results = (new CDiv())
-	->addClass('umg-results')
-	->addItem((new CDiv())
-		->addClass('umg-results-header')
-		->addItem((new CTag('h2', true, _('Inactive User Review'))))
-		->addItem((new CSpan(_s('%1$d users match the current filters', count($data['users']))))->setId('umg-match-count')))
-	->addItem($table)
-	->addItem((new CDiv())
-		->addClass('umg-footer')
-		->addItem((new CDiv(_s('Showing %1$d users', count($data['users']))))->addClass('umg-footer-info'))
-		->addItem((new CDiv())
-			->addClass('umg-bulk-actions')
-			->addItem((new CSimpleButton(_('Export CSV')))->setId('umg-export-csv'))
-			->addItem((new CSimpleButton(_('Flag Selected for Approval')))->setId('umg-bulk-flag'))
-			->addItem((new CSimpleButton(_('Disable Selected Users')))->addClass('btn-danger')->setId('umg-bulk-disable'))));
+$results_html = '<div class="umg-results">'
+	. '<div class="umg-results-header"><h2>' . _('Inactive User Review') . '</h2>'
+	. '<span>' . _s('%1$d users match the current filters', count($data['users'])) . '</span></div>'
+	. '<div class="umg-table-wrap"><table class="umg-table"><thead><tr>'
+	. '<th class="umg-col-check"><input type="checkbox" id="umg-select-all"></th>'
+	. '<th>' . _('User') . '</th><th>' . _('Account Created') . '</th><th>' . _('Last Login') . '</th>'
+	. '<th>' . _('Account Age') . '</th><th>' . _('Inactive For') . '</th><th>' . _('Activity') . '</th>'
+	. '<th>' . _('Recommendation') . '</th><th>' . _('Action') . '</th>'
+	. '</tr></thead><tbody>' . $rows_html . '</tbody></table></div>'
+	. '<div class="umg-footer"><div class="umg-footer-info">' . _s('Showing %1$d users', count($data['users'])) . '</div>'
+	. '<div class="umg-bulk-actions">'
+	. '<button type="button" id="umg-export-csv">' . _('Export CSV') . '</button>'
+	. '<button type="button" id="umg-bulk-flag">' . _('Flag Selected for Approval') . '</button>'
+	. '<button type="button" class="btn-danger" id="umg-bulk-disable">' . _('Disable Selected Users') . '</button>'
+	. '</div></div></div>';
 
 /*
  * ------------------------------------------------------------
  * Policy panel
  * ------------------------------------------------------------
  */
-$policy_panel = (new CDiv())
-	->addClass('umg-policy')
-	->addItem((new CTag('h2', true, _('Current Inactivity Policy'))))
-	->addItem((new CDiv())
-		->addClass('umg-policy-grid')
-		->addItem([
-			(new CDiv())->addClass('umg-policy-item')->addItem([
-				(new CDiv(_('Minimum Account Age')))->addClass('umg-policy-label'),
-				(new CDiv(_s('%1$d Days', $policy['min_account_age_days'])))->addClass('umg-policy-value')
-			]),
-			(new CDiv())->addClass('umg-policy-item')->addItem([
-				(new CDiv(_('Inactivity Threshold')))->addClass('umg-policy-label'),
-				(new CDiv(_s('%1$d Days', $policy['inactivity_threshold_days'])))->addClass('umg-policy-value')
-			]),
-			(new CDiv())->addClass('umg-policy-item')->addItem([
-				(new CDiv(_('Never Logged In')))->addClass('umg-policy-label'),
-				(new CDiv(_s('Disable if account > %1$d days', $policy['min_account_age_days'])))->addClass('umg-policy-value')
-			])
-		]));
+$policy_html = '<div class="umg-policy"><h2>' . _('Current Inactivity Policy') . '</h2>'
+	. '<div class="umg-policy-grid">'
+	. '<div class="umg-policy-item"><div class="umg-policy-label">' . _('Minimum Account Age') . '</div>'
+	. '<div class="umg-policy-value">' . _s('%1$d Days', $policy['min_account_age_days']) . '</div></div>'
+	. '<div class="umg-policy-item"><div class="umg-policy-label">' . _('Inactivity Threshold') . '</div>'
+	. '<div class="umg-policy-value">' . _s('%1$d Days', $policy['inactivity_threshold_days']) . '</div></div>'
+	. '<div class="umg-policy-item"><div class="umg-policy-label">' . _('Never Logged In') . '</div>'
+	. '<div class="umg-policy-value">' . _s('Disable if account > %1$d days', $policy['min_account_age_days']) . '</div></div>'
+	. '</div></div>';
 
 /*
  * ------------------------------------------------------------
- * Disable / approval modal (hidden by default, driven by JS)
+ * Modal
  * ------------------------------------------------------------
  */
-$modal = (new CDiv())
-	->setId('umg-modal-backdrop')
-	->addClass('umg-modal-backdrop')
-	->addItem((new CDiv())
-		->addClass('umg-modal')
-		->addItem((new CTag('h3', true, _('Confirm Action')))->setId('umg-modal-title'))
-		->addItem((new CDiv(_('This will disable login access for the selected user(s).')))->setId('umg-modal-desc')->addClass('umg-modal-desc'))
-		->addItem((new CDiv())->addClass('umg-filter')->addItem([
-			new CLabel(_('Request No.'), 'umg_request_no'),
-			(new CTextBox('umg_request_no', ''))->setId('umg_request_no')->setAttribute('placeholder', _('e.g. CHG0012345'))
-		]))
-		->addItem((new CDiv())->addClass('umg-filter')->addItem([
-			new CLabel(_('Comment') . ' *', 'umg_comment'),
-			(new CTextArea('umg_comment', ''))->setId('umg_comment')->setAttribute('placeholder', _('Reason for this action (required)'))
-		]))
-		->addItem((new CDiv())
-			->addClass('umg-modal-actions')
-			->addItem((new CSimpleButton(_('Cancel')))->setId('umg-modal-cancel'))
-			->addItem((new CSimpleButton(_('Flag for Approval')))->setId('umg-modal-flag'))
-			->addItem((new CSimpleButton(_('Disable Now')))->addClass('btn-danger')->setId('umg-modal-confirm'))));
+$modal_html = '<div id="umg-modal-backdrop" class="umg-modal-backdrop"><div class="umg-modal">'
+	. '<h3>' . _('Confirm Action') . '</h3>'
+	. '<div class="umg-modal-desc" id="umg-modal-desc"></div>'
+	. '<div class="umg-filter"><label>' . _('Request No.') . '</label>'
+	. '<input type="text" id="umg_request_no" placeholder="e.g. CHG0012345"></div>'
+	. '<div class="umg-filter"><label>' . _('Comment') . ' *</label>'
+	. '<textarea id="umg_comment" placeholder="' . _('Reason for this action (required)') . '"></textarea></div>'
+	. '<div class="umg-modal-actions">'
+	. '<button type="button" id="umg-modal-cancel">' . _('Cancel') . '</button>'
+	. '<button type="button" id="umg-modal-flag">' . _('Flag for Approval') . '</button>'
+	. '<button type="button" class="btn-danger" id="umg-modal-confirm">' . _('Disable Now') . '</button>'
+	. '</div></div></div>';
 
 $css = <<<CSS
 .umg-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
@@ -266,21 +200,26 @@ $css = <<<CSS
 .umg-filter-row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .umg-filter { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
 .umg-filter label { font-size: 11px; color: #5f6b78; }
+.umg-select, .umg-filter input, .umg-filter textarea { height: 34px; border: 1px solid #c7cdd4; border-radius: 3px; padding: 0 10px; }
+.umg-filter textarea { height: 70px; padding: 8px 10px; font-family: inherit; }
+.umg-filters button, .umg-bulk-actions button, .umg-modal-actions button { height: 34px; border: 1px solid #b8bec6; background: #fff; border-radius: 3px; padding: 0 15px; cursor: pointer; font-size: 13px; }
+.btn-primary { background: #1f8dd6 !important; border-color: #1f8dd6 !important; color: #fff; }
+.btn-danger { background: #d94b4b !important; border-color: #d94b4b !important; color: #fff; }
 .umg-results-header { padding: 14px 18px; border-bottom: 1px solid #d9dde3; display: flex; justify-content: space-between; align-items: center; }
-.umg-results { overflow-x: auto; }
-table.umg-table { width: 100%; table-layout: auto; border-collapse: collapse; }
+.umg-table-wrap { overflow-x: auto; width: 100%; }
+table.umg-table { width: 100%; min-width: 900px; border-collapse: collapse; table-layout: auto; }
 table.umg-table th, table.umg-table td { padding: 10px 12px; border-bottom: 1px solid #e7e9ec; text-align: left; vertical-align: middle; white-space: nowrap; }
 table.umg-table th { background: #f6f7f9; font-size: 12px; color: #4b5563; font-weight: 600; }
 table.umg-table td:nth-child(2) { white-space: normal; min-width: 160px; }
-table.umg-table .umg-col-check { width: 34px; }
+.umg-col-check { width: 34px; }
 .umg-username { font-weight: 600; display: block; }
 .umg-subtext { font-size: 11px; color: #7b8490; display: block; margin-top: 2px; }
-.umg-status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+.umg-status { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .umg-status-danger { background: #fde8e8; color: #b42323; }
 .umg-status-warning { background: #fff4d6; color: #8a6200; }
 .umg-status-ok { background: #e6f6ed; color: #176b3a; }
 .umg-status-info { background: #e8f1fb; color: #175a9d; }
-.umg-footer { padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #d9dde3; }
+.umg-footer { padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #d9dde3; flex-wrap: wrap; gap: 10px; }
 .umg-bulk-actions { display: flex; gap: 8px; }
 .umg-policy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .umg-policy-item { background: #f7f8fa; border: 1px solid #e0e3e7; padding: 10px 12px; border-radius: 3px; }
@@ -295,88 +234,85 @@ CSS;
 
 $js = <<<JS
 (function() {
+	function qs(sel, ctx) { return (ctx || document).querySelector(sel); }
+	function qsa(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+
 	var selected = {};
 
-	function selectedIds() {
-		return Object.keys(selected).filter(function(id) { return selected[id]; });
-	}
-
-	document.querySelectorAll('.umg-row-check').forEach(function(cb) {
-		cb.addEventListener('change', function() {
-			selected[cb.dataset.userid] = cb.checked;
-		});
+	qsa('.umg-row-check').forEach(function(cb) {
+		cb.addEventListener('change', function() { selected[cb.dataset.userid] = cb.checked; });
 	});
 
-	var selectAll = document.querySelector('[name=select_all]');
+	var selectAll = qs('#umg-select-all');
 	if (selectAll) {
 		selectAll.addEventListener('change', function() {
-			document.querySelectorAll('.umg-row-check:not(:disabled)').forEach(function(cb) {
+			qsa('.umg-row-check:not(:disabled)').forEach(function(cb) {
 				cb.checked = selectAll.checked;
 				selected[cb.dataset.userid] = cb.checked;
 			});
 		});
 	}
 
-	var modalBackdrop = document.getElementById('umg-modal-backdrop');
-	var pendingIds = [];
-	var pendingMode = null;
+	function selectedIds() {
+		return Object.keys(selected).filter(function(id) { return selected[id]; });
+	}
 
-	function openModal(ids, single) {
+	var modalBackdrop = qs('#umg-modal-backdrop');
+	var pendingIds = [];
+
+	function openModal(ids) {
 		pendingIds = ids;
-		document.getElementById('umg_request_no').value = '';
-		document.getElementById('umg_comment').value = '';
-		document.getElementById('umg-modal-desc').textContent =
-			ids.length > 1
-				? ids.length + ' users selected. Choose an action below.'
-				: 'This will affect 1 user. Choose an action below.';
+		qs('#umg_request_no').value = '';
+		qs('#umg_comment').value = '';
+		qs('#umg-modal-desc').textContent = ids.length > 1
+			? ids.length + ' users selected. Choose an action below.'
+			: 'This will affect 1 user. Choose an action below.';
 		modalBackdrop.classList.add('umg-open');
 	}
 
-	document.querySelectorAll('.umg-row-disable').forEach(function(btn) {
-		btn.addEventListener('click', function() {
-			openModal([btn.dataset.userid], true);
-		});
+	qsa('.umg-row-disable').forEach(function(btn) {
+		btn.addEventListener('click', function() { openModal([btn.dataset.userid]); });
 	});
 
-	var bulkDisableBtn = document.getElementById('umg-bulk-disable');
+	var bulkDisableBtn = qs('#umg-bulk-disable');
 	if (bulkDisableBtn) {
 		bulkDisableBtn.addEventListener('click', function() {
 			var ids = selectedIds();
 			if (ids.length === 0) { alert('Select at least one user.'); return; }
-			openModal(ids, false);
+			openModal(ids);
 		});
 	}
 
-	var bulkFlagBtn = document.getElementById('umg-bulk-flag');
+	var bulkFlagBtn = qs('#umg-bulk-flag');
 	if (bulkFlagBtn) {
 		bulkFlagBtn.addEventListener('click', function() {
 			var ids = selectedIds();
 			if (ids.length === 0) { alert('Select at least one user.'); return; }
-			submitAction(ids, 'flag_approval');
+			submitAction(ids, 'flag_approval', '', '');
 		});
 	}
 
-	document.getElementById('umg-modal-cancel').addEventListener('click', function() {
-		modalBackdrop.classList.remove('umg-open');
+	var cancelBtn = qs('#umg-modal-cancel');
+	if (cancelBtn) cancelBtn.addEventListener('click', function() { modalBackdrop.classList.remove('umg-open'); });
+
+	var flagBtn = qs('#umg-modal-flag');
+	if (flagBtn) flagBtn.addEventListener('click', function() {
+		submitAction(pendingIds, 'flag_approval', qs('#umg_request_no').value, qs('#umg_comment').value);
 	});
 
-	document.getElementById('umg-modal-flag').addEventListener('click', function() {
-		submitAction(pendingIds, 'flag_approval');
-	});
-
-	document.getElementById('umg-modal-confirm').addEventListener('click', function() {
-		var comment = document.getElementById('umg_comment').value.trim();
+	var confirmBtn = qs('#umg-modal-confirm');
+	if (confirmBtn) confirmBtn.addEventListener('click', function() {
+		var comment = qs('#umg_comment').value.trim();
 		if (!comment) { alert('A comment is required to disable directly.'); return; }
-		submitAction(pendingIds, 'disable_now');
+		submitAction(pendingIds, 'disable_now', qs('#umg_request_no').value, comment);
 	});
 
-	function submitAction(ids, mode) {
+	function submitAction(ids, mode, requestNo, comment) {
 		var params = new URLSearchParams();
 		ids.forEach(function(id) { params.append('userids[]', id); });
 		params.append('mode', mode);
-		params.append('request_no', document.getElementById('umg_request_no').value);
-		params.append('comment', document.getElementById('umg_comment').value);
-		params.append('_csrf_token', '{$csrf_token}');
+		params.append('request_no', requestNo || '');
+		params.append('comment', comment || '');
 
 		fetch('zabbix.php?action=user.policy.execute', {
 			method: 'POST',
@@ -386,49 +322,50 @@ $js = <<<JS
 		.then(function(r) { return r.json(); })
 		.then(function(data) {
 			modalBackdrop.classList.remove('umg-open');
-			if (data.success === false) {
+			if (data && data.success === false) {
 				alert(data.error || 'Action failed.');
 			}
 			else {
 				location.reload();
 			}
 		})
-		.catch(function() {
-			alert('Request failed — check the network tab.');
+		.catch(function(err) {
+			alert('Request failed: ' + err);
 		});
 	}
 
-	var applyBtn = document.getElementById('umg-filter-apply');
+	var applyBtn = qs('#umg-filter-apply');
 	if (applyBtn) {
 		applyBtn.addEventListener('click', function() {
 			var params = new URLSearchParams();
-			params.append('filter_set', 1);
-			params.append('filter_username', document.querySelector('[name=filter_username]').value);
+			params.append('filter_username', qs('[name=filter_username]').value);
 			['filter_activity', 'filter_account_age', 'filter_recommendation', 'filter_status'].forEach(function(name) {
-				var el = document.querySelector('[name=' + name + ']');
-				if (el) { params.append(name, el.value); }
+				var el = qs('[name=' + name + ']');
+				if (el) params.append(name, el.value);
 			});
-			location.href = 'zabbix.php?action=user.policy&' + params.toString();
+			window.location.href = 'zabbix.php?action=user.policy&' + params.toString();
 		});
 	}
 
-	var resetBtn = document.getElementById('umg-filter-reset');
+	var resetBtn = qs('#umg-filter-reset');
 	if (resetBtn) {
 		resetBtn.addEventListener('click', function() {
-			location.href = 'zabbix.php?action=user.policy&filter_rst=1';
+			window.location.href = 'zabbix.php?action=user.policy&filter_rst=1';
 		});
 	}
 
-	var exportBtn = document.getElementById('umg-export-csv');
+	var exportBtn = qs('#umg-export-csv');
 	if (exportBtn) {
 		exportBtn.addEventListener('click', function() {
 			var rows = [['User ID', 'Username', 'Account Created', 'Last Login', 'Account Age (days)', 'Inactive (days)', 'Recommendation']];
-			document.querySelectorAll('.umg-table tbody tr').forEach(function(tr) {
+			qsa('.umg-table tbody tr').forEach(function(tr) {
 				var cells = tr.querySelectorAll('td');
-				if (cells.length < 9) { return; }
+				if (cells.length < 9) return;
+				var uname = cells[1].querySelector('.umg-username');
+				var uid = cells[1].querySelector('.umg-subtext');
 				rows.push([
-					cells[1].querySelector('.umg-subtext') ? cells[1].querySelector('.umg-subtext').textContent.replace('User ID: ', '') : '',
-					cells[1].querySelector('.umg-username') ? cells[1].querySelector('.umg-username').textContent : '',
+					uid ? uid.textContent.replace('User ID: ', '') : '',
+					uname ? uname.textContent : '',
 					cells[2].textContent.trim(),
 					cells[3].textContent.trim(),
 					cells[4].textContent.trim(),
@@ -451,16 +388,11 @@ JS;
 
 (new CHtmlPage())
 	->setTitle($data['title'])
-	->addItem(
-		// encode = false: this must go out as raw CSS, not HTML-escaped text.
-		(new CTag('style', false, $css))
-	)
-	->addItem($cards)
-	->addItem($filters)
-	->addItem($results)
-	->addItem($policy_panel)
-	->addItem($modal)
-	// encode = false: same deal for the script block — escaping it silently
-	// turned every button/filter/modal handler into dead markup.
-	->addItem((new CTag('script', false, $js)))
+	->addItem(new CTag('style', false, $css))
+	->addItem(new CTag('div', false, $cards_html))
+	->addItem(new CTag('div', false, $filters_html))
+	->addItem(new CTag('div', false, $results_html))
+	->addItem(new CTag('div', false, $policy_html))
+	->addItem(new CTag('div', false, $modal_html))
+	->addItem(new CTag('script', false, $js))
 	->show();

@@ -5,44 +5,57 @@ namespace Modules\UserMgmt\Actions;
 use API;
 use CController;
 use CControllerResponseData;
-#use Modules\UserMgmt\Lib\CApprovalQueue;
 
 class UserPolicyExecute extends CController {
+
+	private static function queueFile(): string {
+		return __DIR__ . '/../data/approval_queue.json';
+	}
+
+	private static function loadQueue(): array {
+		$file = self::queueFile();
+		if (!is_file($file)) {
+			return [];
+		}
+		$data = json_decode((string) file_get_contents($file), true);
+		return is_array($data) ? $data : [];
+	}
+
+	private static function saveQueue(array $data): void {
+		$dir = dirname(self::queueFile());
+		if (!is_dir($dir)) {
+			mkdir($dir, 0775, true);
+		}
+		file_put_contents(self::queueFile(), json_encode($data, JSON_PRETTY_PRINT));
+	}
+
+	private static function addQueueEntry(string $userid, string $username, string $requested_by,
+			string $request_no, string $comment, string $status): void {
+		$data = self::loadQueue();
+		$data[] = [
+			'id' => uniqid('appr_', true),
+			'userid' => $userid,
+			'username' => $username,
+			'requested_by' => $requested_by,
+			'request_no' => $request_no,
+			'comment' => $comment,
+			'status' => $status,
+			'created' => time()
+		];
+		self::saveQueue($data);
+	}
 
 	public function init(): void {
 		$this->disableCsrfValidation();
 	}
 
 	protected function checkInput(): bool {
-		$fields = [
+		return $this->validateInput([
 			'userids'    => 'required|array_db users.userid',
-			'mode'       => 'required|in disable_now,flag_approval,resolve_approval',
+			'mode'       => 'required|in disable_now,flag_approval',
 			'request_no' => 'string',
-			'comment'    => 'string',
-			'entry_id'   => 'string',
-			'resolution' => 'in approved,rejected'
-		];
-
-		$ret = $this->validateInput($fields);
-
-		if ($ret && $this->getInput('mode') === 'disable_now'
-				&& trim($this->getInput('comment', '')) === '') {
-			// Every direct disable must carry a reason — this is the audit trail an approval
-			// workflow would otherwise provide.
-			error(_('A comment is required when disabling accounts directly.'));
-			$ret = false;
-		}
-
-		if (($errors = getMessages()) !== null) {
-			$this->setResponse(
-				(new CControllerResponseData(['main_block' => json_encode([
-					'error' => ['messages' => array_column($errors, 'message')]
-				])]))
-			);
-			$ret = false;
-		}
-
-		return $ret;
+			'comment'    => 'string'
+		]);
 	}
 
 	protected function checkPermissions(): bool {
@@ -51,117 +64,44 @@ class UserPolicyExecute extends CController {
 
 	protected function doAction(): void {
 		$mode = $this->getInput('mode');
+		$userids = $this->getInput('userids');
+		$request_no = $this->getInput('request_no', '');
+		$comment = $this->getInput('comment', '');
 		$requested_by = \CWebUser::$data['username'] ?? (string) \CWebUser::$data['userid'];
-		$result = ['success' => true, 'processed' => []];
 
-		switch ($mode) {
-			case 'disable_now':
-				$userids = $this->getInput('userids');
-				$request_no = $this->getInput('request_no', '');
-				$comment = $this->getInput('comment', '');
+		if ($mode === 'disable_now' && trim($comment) === '') {
+			$this->setResponse(new CControllerResponseData([
+				'main_block' => json_encode(['success' => false, 'error' => _('A comment is required to disable directly.')])
+			]));
+			return;
+		}
 
-				// Resolve each user's current groups, then set gui_access = DISABLED on all of them.
-				// (Zabbix disables login at the user-group level, not per-user.)
-				$users = API::User()->get([
-					'output' => ['userid', 'username'],
-					'selectUsrgrps' => ['usrgrpid'],
-					'userids' => $userids
-				]);
+		$users = API::User()->get([
+			'output' => ['userid', 'username'],
+			'selectUsrgrps' => ['usrgrpid'],
+			'userids' => $userids
+		]);
 
-				foreach ($users as $user) {
-					$usrgrpids = array_column($user['usrgrps'], 'usrgrpid');
-					if (!$usrgrpids) {
-						continue; // no groups to disable via — leave alone rather than guess
-					}
+		$processed = [];
 
-					API::UserGroup()->update(array_map(function($id) {
-						return ['usrgrpid' => $id, 'gui_access' => GROUP_GUI_ACCESS_DISABLED];
-					}, $usrgrpids));
-
-					// Audit trail note: Zabbix's own audit log already records the group update;
-					// we additionally log request_no/comment into the approval queue file as a
-					// resolved record so the "why" isn't lost, even outside the approval flow.
-					CApprovalQueue::add(
-						(string) $user['userid'], $user['username'], $requested_by,
-						$request_no, $comment
-					);
-					$queue = CApprovalQueue::getAll();
-					$last = end($queue);
-					CApprovalQueue::resolve($last['id'], 'approved', $requested_by);
-
-					$result['processed'][] = $user['username'];
+		foreach ($users as $user) {
+			if ($mode === 'disable_now') {
+				$usrgrpids = array_column($user['usrgrps'], 'usrgrpid');
+				foreach ($usrgrpids as $usrgrpid) {
+					API::UserGroup()->update(['usrgrpid' => $usrgrpid, 'gui_access' => GROUP_GUI_ACCESS_DISABLED]);
 				}
-				break;
-
-			case 'flag_approval':
-				$userids = $this->getInput('userids');
-				$request_no = $this->getInput('request_no', '');
-				$comment = $this->getInput('comment', '');
-
-				$users = API::User()->get([
-					'output' => ['userid', 'username'],
-					'userids' => $userids
-				]);
-
-				foreach ($users as $user) {
-					if (CApprovalQueue::isPending((string) $user['userid'])) {
-						continue;
-					}
-					CApprovalQueue::add(
-						(string) $user['userid'], $user['username'], $requested_by,
-						$request_no, $comment
-					);
-					$result['processed'][] = $user['username'];
-				}
-				break;
-
-			case 'resolve_approval':
-				// Approver reviews a pending flag and either confirms the disable or rejects it.
-				// NOTE: this only records the decision and, on approval, disables the account —
-				// it does not yet enforce that the resolver differs from the requester
-				// (a maker-checker separation), which is worth adding once the approval
-				// workflow's ownership is decided.
-				$entry_id = $this->getInput('entry_id');
-				$resolution = $this->getInput('resolution');
-
-				$entry = null;
-				foreach (CApprovalQueue::getAll() as $e) {
-					if ($e['id'] === $entry_id) {
-						$entry = $e;
-						break;
-					}
-				}
-
-				if ($entry === null) {
-					$result['success'] = false;
-					$result['error'] = _('Approval request not found.');
-					break;
-				}
-
-				CApprovalQueue::resolve($entry_id, $resolution, $requested_by);
-
-				if ($resolution === 'approved') {
-					$user = API::User()->get([
-						'output' => ['userid'],
-						'selectUsrgrps' => ['usrgrpid'],
-						'userids' => [$entry['userid']]
-					]);
-					if ($user) {
-						$usrgrpids = array_column($user[0]['usrgrps'], 'usrgrpid');
-						if ($usrgrpids) {
-							API::UserGroup()->update(array_map(function($id) {
-								return ['usrgrpid' => $id, 'gui_access' => GROUP_GUI_ACCESS_DISABLED];
-							}, $usrgrpids));
-						}
-					}
-				}
-
-				$result['processed'][] = $entry['username'];
-				break;
+				self::addQueueEntry((string) $user['userid'], $user['username'], $requested_by,
+					$request_no, $comment, 'approved');
+			}
+			else { // flag_approval
+				self::addQueueEntry((string) $user['userid'], $user['username'], $requested_by,
+					$request_no, $comment, 'pending');
+			}
+			$processed[] = $user['username'];
 		}
 
 		$this->setResponse(new CControllerResponseData([
-			'main_block' => json_encode($result)
+			'main_block' => json_encode(['success' => true, 'processed' => $processed])
 		]));
 	}
 }
