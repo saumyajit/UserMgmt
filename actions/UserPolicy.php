@@ -208,10 +208,9 @@ class UserPolicy extends CController {
 		 */
 
 		$login_logs = [];
-
-
+		
 		if ($candidate_userids) {
-
+		
 			$login_logs = API::AuditLog()->get([
 				'output' => [
 					'auditid',
@@ -224,6 +223,7 @@ class UserPolicy extends CController {
 					'resourcename',
 					'ip'
 				],
+				'userids' => $candidate_userids,
 				'filter' => [
 					'action' => 8,
 					'resourcetype' => 0
