@@ -15,7 +15,7 @@
 function userMgmtFormatTimestamp($timestamp): string {
 
 	if ($timestamp === null) {
-		return _('Not Found');
+		return _('Never');
 	}
 
 	return zbx_date2str(
@@ -27,18 +27,12 @@ function userMgmtFormatTimestamp($timestamp): string {
 
 /*
  * ============================================================
- * Summary values
+ * Summary
  * ============================================================
  */
 
 $summary = $data['summary'];
 
-
-/*
- * ============================================================
- * SUMMARY TABLE
- * ============================================================
- */
 
 $summary_table = (new CTableInfo())
 	->setHeader([
@@ -52,12 +46,12 @@ $summary_table = (new CTableInfo())
 	])
 
 	->addRow([
-		_('Accounts Older Than '.$data['account_age_threshold'].' Days'),
+		_('Accounts Older Than 60 Days'),
 		$summary['users_over_threshold']
 	])
 
 	->addRow([
-		_('Accounts Younger Than '.$data['account_age_threshold'].' Days'),
+		_('Accounts Younger Than 60 Days'),
 		$summary['users_under_threshold']
 	])
 
@@ -67,8 +61,18 @@ $summary_table = (new CTableInfo())
 	])
 
 	->addRow([
-		_('Pending Activity Evaluation'),
-		$summary['pending_activity_check']
+		_('Never Logged In'),
+		$summary['never_logged_in']
+	])
+
+	->addRow([
+		_('Inactive More Than 45 Days'),
+		$summary['inactive_users']
+	])
+
+	->addRow([
+		_('Recently Active'),
+		$summary['active_users']
 	])
 
 	->addRow([
@@ -79,7 +83,7 @@ $summary_table = (new CTableInfo())
 
 /*
  * ============================================================
- * POLICY INFORMATION
+ * Policy
  * ============================================================
  */
 
@@ -95,23 +99,28 @@ $policy_table = (new CTableInfo())
 	])
 
 	->addRow([
-		_('Accounts Younger Than Threshold'),
+		_('Inactivity Threshold'),
+		$data['inactivity_threshold'].' '._('Days')
+	])
+
+	->addRow([
+		_('Account < 60 Days'),
 		_('No Action')
 	])
 
 	->addRow([
-		_('Accounts Older Than Threshold'),
-		_('Evaluate Login Activity')
+		_('Account >= 60 Days + Never Logged In'),
+		_('Disable')
 	])
 
 	->addRow([
-		_('Never Logged In'),
-		_('To be evaluated in next phase')
+		_('Account >= 60 Days + Inactive > 45 Days'),
+		_('Disable')
 	])
 
 	->addRow([
-		_('Last Login Older Than 45 Days'),
-		_('To be evaluated in next phase')
+		_('Account >= 60 Days + Active'),
+		_('No Action')
 	])
 
 	->addRow([
@@ -122,44 +131,36 @@ $policy_table = (new CTableInfo())
 
 /*
  * ============================================================
- * CANDIDATE USERS TABLE
+ * RECOMMENDED DISABLE
  * ============================================================
- *
- * These are users older than 60 days.
- *
- * IMPORTANT:
- *
- * They are NOT yet considered inactive.
- *
- * We still need to inspect login activity.
  */
 
-$candidate_table = (new CTableInfo())
+$disable_table = (new CTableInfo())
 	->setHeader([
 		_('User ID'),
 		_('Username'),
-		_('Name'),
-		_('Surname'),
-		_('Role ID'),
 		_('Account Created'),
 		_('Account Age'),
-		_('Evaluation'),
+		_('Last Login'),
+		_('Inactive For'),
+		_('Reason'),
 		_('Recommendation')
 	]);
 
 
-foreach ($data['candidate_users'] as $user) {
+foreach ($data['recommended_disable'] as $user) {
 
-	$candidate_table->addRow([
+	if ($user['evaluation'] === 'never_logged_in') {
+		$reason = _('Never Logged In');
+	}
+	else {
+		$reason = _('Last Login Older Than 45 Days');
+	}
+
+	$disable_table->addRow([
 		$user['userid'],
 
 		$user['username'],
-
-		$user['name'],
-
-		$user['surname'],
-
-		$user['roleid'],
 
 		userMgmtFormatTimestamp(
 			$user['creation_clock']
@@ -167,16 +168,95 @@ foreach ($data['candidate_users'] as $user) {
 
 		$user['account_age_days'].' '._('Days'),
 
-		_('Login Activity Check Required'),
+		userMgmtFormatTimestamp(
+			$user['last_login_clock']
+		),
 
-		_('Pending')
+		$user['inactive_days'] !== null
+			? $user['inactive_days'].' '._('Days')
+			: _('Never'),
+
+		$reason,
+
+		_('DISABLE')
 	]);
 }
 
 
 /*
  * ============================================================
- * USERS UNDER 60 DAYS
+ * ALL EVALUATED USERS
+ * ============================================================
+ */
+
+$evaluated_table = (new CTableInfo())
+	->setHeader([
+		_('User ID'),
+		_('Username'),
+		_('Account Created'),
+		_('Account Age'),
+		_('Last Login'),
+		_('Inactive For'),
+		_('Activity Status'),
+		_('Recommendation')
+	]);
+
+
+foreach ($data['evaluated_users'] as $user) {
+
+	switch ($user['evaluation']) {
+
+		case 'never_logged_in':
+			$activity_status = _('Never Logged In');
+			$recommendation = _('Disable');
+			break;
+
+		case 'inactive':
+			$activity_status = _('Inactive');
+			$recommendation = _('Disable');
+			break;
+
+		case 'active':
+			$activity_status = _('Active');
+			$recommendation = _('No Action');
+			break;
+
+		default:
+			$activity_status = _('Unknown');
+			$recommendation = _('No Action');
+			break;
+	}
+
+
+	$evaluated_table->addRow([
+		$user['userid'],
+
+		$user['username'],
+
+		userMgmtFormatTimestamp(
+			$user['creation_clock']
+		),
+
+		$user['account_age_days'].' '._('Days'),
+
+		userMgmtFormatTimestamp(
+			$user['last_login_clock']
+		),
+
+		$user['inactive_days'] !== null
+			? $user['inactive_days'].' '._('Days')
+			: _('Never'),
+
+		$activity_status,
+
+		$recommendation
+	]);
+}
+
+
+/*
+ * ============================================================
+ * NEW USERS
  * ============================================================
  */
 
@@ -184,10 +264,8 @@ $new_users_table = (new CTableInfo())
 	->setHeader([
 		_('User ID'),
 		_('Username'),
-		_('Name'),
 		_('Account Created'),
 		_('Account Age'),
-		_('Evaluation'),
 		_('Recommendation')
 	]);
 
@@ -199,15 +277,11 @@ foreach ($data['users_under_threshold'] as $user) {
 
 		$user['username'],
 
-		$user['name'],
-
 		userMgmtFormatTimestamp(
 			$user['creation_clock']
 		),
 
 		$user['account_age_days'].' '._('Days'),
-
-		_('New Account'),
 
 		_('No Action')
 	]);
@@ -216,7 +290,7 @@ foreach ($data['users_under_threshold'] as $user) {
 
 /*
  * ============================================================
- * CREATION TIME UNKNOWN
+ * UNKNOWN CREATION TIME
  * ============================================================
  */
 
@@ -227,7 +301,6 @@ $unknown_table = (new CTableInfo())
 		_('Name'),
 		_('Role ID'),
 		_('Creation Time'),
-		_('Evaluation'),
 		_('Recommendation')
 	]);
 
@@ -245,8 +318,6 @@ foreach ($data['users_creation_unknown'] as $user) {
 
 		_('Not Found'),
 
-		_('Unable to determine account age'),
-
 		_('No Automatic Action')
 	]);
 }
@@ -254,7 +325,7 @@ foreach ($data['users_creation_unknown'] as $user) {
 
 /*
  * ============================================================
- * MAIN PAGE
+ * PAGE
  * ============================================================
  */
 
@@ -266,9 +337,7 @@ $page->setTitle(
 
 
 /*
- * ------------------------------------------------------------
  * Summary
- * ------------------------------------------------------------
  */
 
 $page->addItem(
@@ -285,9 +354,7 @@ $page->addItem(
 
 
 /*
- * ------------------------------------------------------------
- * Current policy
- * ------------------------------------------------------------
+ * Policy
  */
 
 $page->addItem(
@@ -304,47 +371,74 @@ $page->addItem(
 
 
 /*
- * ------------------------------------------------------------
- * Accounts requiring activity evaluation
- * ------------------------------------------------------------
+ * Recommended disable
  */
 
 $page->addItem(
 	new CTag(
 		'h2',
 		true,
-		_('Accounts Requiring Activity Evaluation')
+		_('Users Recommended for Disable')
 	)
 );
 
-$page->addItem(
-	new CTag(
-		'p',
-		true,
-		_(
-			'The following enabled accounts are older than the configured '
-			.'account-age threshold. Login activity will be evaluated '
-			.'before any disable recommendation is made.'
+if ($summary['recommended_disable'] === 0) {
+
+	$page->addItem(
+		new CTag(
+			'p',
+			true,
+			_('No users currently meet the disable criteria.')
 		)
-	)
-);
+	);
+}
+else {
 
-$page->addItem(
-	$candidate_table
-);
+	$page->addItem(
+		$disable_table
+	);
+}
 
 
 /*
- * ------------------------------------------------------------
- * New accounts
- * ------------------------------------------------------------
+ * All evaluated users
  */
 
 $page->addItem(
 	new CTag(
 		'h2',
 		true,
-		_('Accounts Younger Than Threshold')
+		_('Activity Evaluation')
+	)
+);
+
+if (!$data['evaluated_users']) {
+
+	$page->addItem(
+		new CTag(
+			'p',
+			true,
+			_('No accounts require activity evaluation.')
+		)
+	);
+}
+else {
+
+	$page->addItem(
+		$evaluated_table
+	);
+}
+
+
+/*
+ * New accounts
+ */
+
+$page->addItem(
+	new CTag(
+		'h2',
+		true,
+		_('Accounts Younger Than 60 Days')
 	)
 );
 
@@ -354,9 +448,7 @@ $page->addItem(
 
 
 /*
- * ------------------------------------------------------------
- * Accounts where creation time could not be determined
- * ------------------------------------------------------------
+ * Unknown creation time
  */
 
 $page->addItem(
@@ -367,27 +459,26 @@ $page->addItem(
 	)
 );
 
-$page->addItem(
-	new CTag(
-		'p',
-		true,
-		_(
-			'These accounts are intentionally excluded from automatic '
-			.'policy actions because their creation time could not be '
-			.'determined from the audit log.'
-		)
-	)
-);
+if (!$data['users_creation_unknown']) {
 
-$page->addItem(
-	$unknown_table
-);
+	$page->addItem(
+		new CTag(
+			'p',
+			true,
+			_('All enabled users have a creation record.')
+		)
+	);
+}
+else {
+
+	$page->addItem(
+		$unknown_table
+	);
+}
 
 
 /*
- * ------------------------------------------------------------
- * Show page
- * ------------------------------------------------------------
+ * Display
  */
 
 $page->show();
