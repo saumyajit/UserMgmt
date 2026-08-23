@@ -5,6 +5,9 @@ namespace Modules\UserMgmt\Actions;
 use API;
 use CController;
 use CControllerResponseData;
+
+require_once __DIR__ . '/../lib/CApprovalQueue.php';
+
 use Modules\UserMgmt\Lib\CApprovalQueue;
 
 class UserPolicyExecute extends CController {

@@ -5,6 +5,13 @@ namespace Modules\UserMgmt\Actions;
 use API;
 use CController;
 use CControllerResponseData;
+
+// Zabbix's module autoloader only knows about classes registered as actions in
+// manifest.json — it won't discover Lib\CApprovalQueue on its own. Load it explicitly
+// rather than trusting autoload, or every request here fatals with "Class not found"
+// before anything renders.
+require_once __DIR__ . '/../lib/CApprovalQueue.php';
+
 use Modules\UserMgmt\Lib\CApprovalQueue;
 
 class UserPolicy extends CController {
