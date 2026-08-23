@@ -214,7 +214,7 @@ $table = (new CTag('table', false, [$thead, new CTag('tbody', false, $rows)]))
 $results_panel = (new CDiv())->addClass('umg-panel')->addItem([
 	(new CDiv())->addClass('umg-results-header')->addItem([
 		new CTag('h2', false, _('Inactive User Review')),
-		new CTag('span', false, '')->setId('umg-match-count')
+		(new CTag('span', false, ''))->setId('umg-match-count')
 	]),
 	$table,
 	(new CDiv())->addClass('umg-footer')->addItem([
@@ -256,7 +256,7 @@ $policy_panel = (new CDiv())->addClass('umg-panel')->addItem([
 $modal = (new CDiv())->addClass('umg-modal-backdrop')->setId('umg-modal-backdrop')->addItem(
 	(new CDiv())->addClass('umg-modal')->addItem([
 		new CTag('h3', false, _('Disable Users')),
-		new CTag('div', false, '')->setId('umg-modal-userlist')->addClass('umg-card-title'),
+		(new CTag('div', false, ''))->setId('umg-modal-userlist')->addClass('umg-card-title'),
 		new CTag('label', false, _('Request No. / Comment (required to disable immediately)')),
 		(new CTag('textarea', false))->setAttribute('rows', '3')->setId('umg-modal-comment'),
 		(new CDiv())->addClass('umg-modal-actions')->addItem([
