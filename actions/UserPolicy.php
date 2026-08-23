@@ -8,199 +8,229 @@ use CControllerResponseData;
 
 class UserPolicy extends CController {
 
-	const MIN_ACCOUNT_AGE_DAYS = 60;
-	const INACTIVITY_THRESHOLD_DAYS = 45;
-
-	// Kept as a plain data file path + private static helpers, deliberately NOT a separate
-	// class in its own namespace — that indirection is what caused load failures earlier.
-	// Everything this module needs to run lives in these two controller files.
-	private static function queueFile(): string {
-		return __DIR__ . '/../data/approval_queue.json';
-	}
-
-	private static function loadQueue(): array {
-		$file = self::queueFile();
-		if (!is_file($file)) {
-			return [];
-		}
-		$data = json_decode((string) file_get_contents($file), true);
-		return is_array($data) ? $data : [];
-	}
-
-	private static function isPending(string $userid): bool {
-		foreach (self::loadQueue() as $entry) {
-			if (($entry['userid'] ?? null) === $userid && ($entry['status'] ?? null) === 'pending') {
-				return true;
-			}
-		}
-		return false;
-	}
+	const DEFAULT_MIN_ACCOUNT_AGE_DAYS = 60;
+	const DEFAULT_INACTIVITY_THRESHOLD_DAYS = 45;
+	const CONFIG_FILE = __DIR__ . '/../data/policy_config.json';
 
 	public function init(): void {
 		$this->disableCsrfValidation();
 	}
 
 	protected function checkInput(): bool {
-		return $this->validateInput([
-			'filter_username'       => 'string',
-			'filter_activity'       => 'in all,never,logged_in,inactive',
-			'filter_account_age'    => 'in all,gt60,lt60',
-			'filter_recommendation' => 'in all,disable,no_action',
-			'filter_status'         => 'in all,enabled,disabled',
-			'filter_rst'            => 'in 1'
-		]);
+		return true;
 	}
 
 	protected function checkPermissions(): bool {
 		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
 
+	/**
+	 * Duplicated intentionally in UserPolicyExecute.php and UserPolicyConfig.php
+	 * so no cross-file class/namespace dependency exists outside of registered
+	 * module actions (see memory: avoids autoload/redeclare fatals seen previously).
+	 */
+	private static function loadConfig(): array {
+		$defaults = [
+			'min_account_age_days' => self::DEFAULT_MIN_ACCOUNT_AGE_DAYS,
+			'inactivity_threshold_days' => self::DEFAULT_INACTIVITY_THRESHOLD_DAYS
+		];
+
+		if (!is_file(self::CONFIG_FILE)) {
+			return $defaults;
+		}
+
+		$raw = @file_get_contents(self::CONFIG_FILE);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		if (!is_array($decoded)) {
+			return $defaults;
+		}
+
+		return [
+			'min_account_age_days' => isset($decoded['min_account_age_days'])
+				? (int) $decoded['min_account_age_days']
+				: $defaults['min_account_age_days'],
+			'inactivity_threshold_days' => isset($decoded['inactivity_threshold_days'])
+				? (int) $decoded['inactivity_threshold_days']
+				: $defaults['inactivity_threshold_days']
+		];
+	}
+
+	private static function loadApprovalQueue(): array {
+		$file = __DIR__ . '/../data/approval_queue.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
 	protected function doAction(): void {
+		$config = self::loadConfig();
+		$now = time();
+
+		/*
+		 * ------------------------------------------------------------
+		 * 1. Get all Zabbix users
+		 * ------------------------------------------------------------
+		 */
 		$users = API::User()->get([
-			'output' => ['userid', 'username', 'name', 'surname', 'roleid'],
-			'selectUsrgrps' => ['usrgrpid', 'name'],
+			'output' => [
+				'userid',
+				'username',
+				'name',
+				'surname',
+				'roleid'
+			],
 			'sortfield' => 'username',
 			'sortorder' => ZBX_SORT_UP
 		]);
 
-		// A user is "disabled" if every group they belong to has gui_access DISABLED —
-		// Zabbix stores that flag on the group, not the user.
-		$usrgrpids = [];
-		foreach ($users as $user) {
-			foreach ($user['usrgrps'] as $grp) {
-				$usrgrpids[$grp['usrgrpid']] = true;
-			}
-		}
-		$group_access = [];
-		if ($usrgrpids) {
-			foreach (API::UserGroup()->get([
-				'output' => ['usrgrpid', 'gui_access'],
-				'usrgrpids' => array_keys($usrgrpids)
-			]) as $group) {
-				$group_access[$group['usrgrpid']] = (int) $group['gui_access'];
-			}
-		}
-
-		// Creation time per user: action=0 (Add), resourcetype=0 (User) audit records.
-		// The User API has no creation-time field, so this is the only source.
-		$creation_times = [];
-		foreach (API::AuditLog()->get([
-			'output' => ['clock', 'resourceid'],
+		/*
+		 * ------------------------------------------------------------
+		 * 2. Get user creation audit records
+		 *
+		 * action = 0 -> Add, resourcetype = 0 -> User
+		 * ------------------------------------------------------------
+		 */
+		$user_creation_logs = API::AuditLog()->get([
+			'output' => ['auditid', 'userid', 'username', 'clock', 'action', 'resourcetype', 'resourceid', 'resourcename', 'ip'],
 			'filter' => ['action' => 0, 'resourcetype' => 0],
 			'sortfield' => 'clock',
 			'sortorder' => ZBX_SORT_DOWN
-		]) as $audit) {
+		]);
+
+		$creation_times = [];
+		foreach ($user_creation_logs as $audit) {
 			$userid = (string) $audit['resourceid'];
 			if (!isset($creation_times[$userid])) {
 				$creation_times[$userid] = (int) $audit['clock'];
 			}
 		}
 
-		// Last successful login per user: action=8 (Login), resourcetype=0 (User).
-		$last_login_times = [];
-		foreach (API::AuditLog()->get([
-			'output' => ['userid', 'clock'],
+		/*
+		 * ------------------------------------------------------------
+		 * 3. Get login audit records
+		 *
+		 * action = 8 -> Login, resourcetype = 0 -> User
+		 * ------------------------------------------------------------
+		 */
+		$login_logs = API::AuditLog()->get([
+			'output' => ['auditid', 'userid', 'username', 'clock', 'action', 'resourcetype', 'resourceid', 'resourcename', 'ip'],
 			'filter' => ['action' => 8, 'resourcetype' => 0],
 			'sortfield' => 'clock',
 			'sortorder' => ZBX_SORT_DOWN,
-			'limit' => 1000
-		]) as $login) {
+			'limit' => 2000
+		]);
+
+		$last_login_times = [];
+		foreach ($login_logs as $login) {
 			$userid = (string) $login['userid'];
 			if (!isset($last_login_times[$userid])) {
 				$last_login_times[$userid] = (int) $login['clock'];
 			}
 		}
 
-		$now = time();
-		$day = 86400;
-		$counts = ['never_logged_in' => 0, 'inactive_45' => 0, 'recommend_disable' => 0];
+		$approval_queue = self::loadApprovalQueue();
+		$pending_userids = [];
+		foreach ($approval_queue as $entry) {
+			if (($entry['status'] ?? '') === 'pending') {
+				$pending_userids[(string) $entry['userid']] = $entry;
+			}
+		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * 4. Compute policy fields per user
+		 *
+		 *   creation_age > min_account_age_days
+		 *     AND last_login is NULL                        => DISABLE (never_logged_in)
+		 *   creation_age > min_account_age_days
+		 *     AND last_login exists
+		 *     AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
+		 *   Everything else                                  => NO ACTION
+		 * ------------------------------------------------------------
+		 */
 		foreach ($users as &$user) {
 			$userid = (string) $user['userid'];
+
 			$creation_clock = $creation_times[$userid] ?? null;
 			$last_login_clock = $last_login_times[$userid] ?? null;
 
-			$account_age_days = $creation_clock !== null ? intdiv($now - $creation_clock, $day) : null;
-			$inactive_days = $last_login_clock !== null ? intdiv($now - $last_login_clock, $day) : null;
+			$creation_age_days = $creation_clock !== null
+				? (int) floor(($now - $creation_clock) / 86400)
+				: null;
 
-			$is_disabled = (bool) $user['usrgrps'];
-			foreach ($user['usrgrps'] as $grp) {
-				if (($group_access[$grp['usrgrpid']] ?? GROUP_GUI_ACCESS_SYSTEM) != GROUP_GUI_ACCESS_DISABLED) {
-					$is_disabled = false;
-					break;
-				}
-			}
+			$last_login_age_days = $last_login_clock !== null
+				? (int) floor(($now - $last_login_clock) / 86400)
+				: null;
 
-			// Policy: age > 60d AND (never logged in OR inactive > 45d) -> disable. Else no action.
-			// Unknown creation time -> no action (conservative, not guessed).
-			$recommendation = 'no_action';
-			if ($account_age_days !== null && $account_age_days > self::MIN_ACCOUNT_AGE_DAYS) {
-				if ($last_login_clock === null) {
-					$recommendation = 'disable';
-					$counts['never_logged_in']++;
-				}
-				elseif ($inactive_days > self::INACTIVITY_THRESHOLD_DAYS) {
-					$recommendation = 'disable';
-					$counts['inactive_45']++;
-				}
+			$account_old_enough = $creation_age_days !== null
+				&& $creation_age_days > $config['min_account_age_days'];
+
+			$never_logged_in = $last_login_clock === null;
+			$inactive_past_threshold = $last_login_age_days !== null
+				&& $last_login_age_days > $config['inactivity_threshold_days'];
+
+			if ($account_old_enough && $never_logged_in) {
+				$recommendation = 'disable';
+				$reason = 'never_logged_in';
 			}
-			elseif ($last_login_clock === null) {
-				$counts['never_logged_in']++;
+			elseif ($account_old_enough && $inactive_past_threshold) {
+				$recommendation = 'disable';
+				$reason = 'inactive';
 			}
-			if ($recommendation === 'disable') {
-				$counts['recommend_disable']++;
+			elseif (!$account_old_enough && $creation_age_days !== null) {
+				$recommendation = 'no_action';
+				$reason = 'new_account';
+			}
+			else {
+				$recommendation = 'no_action';
+				$reason = $never_logged_in ? 'unknown_creation' : 'active';
 			}
 
 			$user['creation_clock'] = $creation_clock;
+			$user['creation_age_days'] = $creation_age_days;
 			$user['last_login_clock'] = $last_login_clock;
-			$user['account_age_days'] = $account_age_days;
-			$user['inactive_days'] = $inactive_days;
+			$user['last_login_age_days'] = $last_login_age_days;
 			$user['recommendation'] = $recommendation;
-			$user['is_disabled'] = $is_disabled;
-			$user['pending_approval'] = self::isPending($userid);
+			$user['reason'] = $reason;
+			$user['pending_approval'] = isset($pending_userids[$userid]);
+			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
 		}
 		unset($user);
 
-		$filter = [
-			'username'       => $this->getInput('filter_username', ''),
-			'activity'       => $this->getInput('filter_activity', 'all'),
-			'account_age'    => $this->getInput('filter_account_age', 'all'),
-			'recommendation' => $this->getInput('filter_recommendation', 'all'),
-			'status'         => $this->getInput('filter_status', 'enabled')
+		$summary = [
+			'total' => count($users),
+			'never_logged_in' => 0,
+			'inactive_over_threshold' => 0,
+			'recommended_disable' => 0
 		];
-		if ($this->hasInput('filter_rst')) {
-			$filter = ['username' => '', 'activity' => 'all', 'account_age' => 'all',
-				'recommendation' => 'all', 'status' => 'enabled'];
+
+		foreach ($users as $user) {
+			if ($user['reason'] === 'never_logged_in') {
+				$summary['never_logged_in']++;
+			}
+			if ($user['reason'] === 'inactive') {
+				$summary['inactive_over_threshold']++;
+			}
+			if ($user['recommendation'] === 'disable') {
+				$summary['recommended_disable']++;
+			}
 		}
 
-		$filtered = array_values(array_filter($users, function($u) use ($filter) {
-			if ($filter['username'] !== '' && stripos($u['username'], $filter['username']) === false) {
-				return false;
-			}
-			if ($filter['activity'] === 'never' && $u['last_login_clock'] !== null) return false;
-			if ($filter['activity'] === 'logged_in' && $u['last_login_clock'] === null) return false;
-			if ($filter['activity'] === 'inactive'
-					&& !($u['inactive_days'] !== null && $u['inactive_days'] > self::INACTIVITY_THRESHOLD_DAYS)) return false;
-			if ($filter['account_age'] === 'gt60'
-					&& !($u['account_age_days'] !== null && $u['account_age_days'] > self::MIN_ACCOUNT_AGE_DAYS)) return false;
-			if ($filter['account_age'] === 'lt60'
-					&& !($u['account_age_days'] !== null && $u['account_age_days'] <= self::MIN_ACCOUNT_AGE_DAYS)) return false;
-			if ($filter['recommendation'] !== 'all' && $u['recommendation'] !== $filter['recommendation']) return false;
-			if ($filter['status'] === 'enabled' && $u['is_disabled']) return false;
-			if ($filter['status'] === 'disabled' && !$u['is_disabled']) return false;
-			return true;
-		}));
-
-		$this->setResponse(new CControllerResponseData([
+		$data = [
 			'title' => _('User Management'),
-			'users' => $filtered,
-			'all_users_count' => count($users),
-			'counts' => $counts,
-			'filter' => $filter,
-			'policy' => [
-				'min_account_age_days' => self::MIN_ACCOUNT_AGE_DAYS,
-				'inactivity_threshold_days' => self::INACTIVITY_THRESHOLD_DAYS
-			]
-		]));
+			'users' => $users,
+			'login_logs' => array_slice($login_logs, 0, 50),
+			'config' => $config,
+			'summary' => $summary
+		];
+
+		$this->setResponse(new CControllerResponseData($data));
 	}
 }
