@@ -8,6 +8,7 @@ use CController;
 class UserPolicyExecute extends CController {
 
 	const APPROVAL_QUEUE_FILE = __DIR__ . '/../data/approval_queue.json';
+	const DISABLED_LOG_FILE = __DIR__ . '/../data/disabled_log.json';
 
 	public function init(): void {
 		$this->disableCsrfValidation();
@@ -15,9 +16,10 @@ class UserPolicyExecute extends CController {
 
 	protected function checkInput(): bool {
 		$fields = [
-			'userids' => 'required|array_id',
+			'userids' => 'array_id',
+			'queue_index' => 'int32',
 			'comment' => 'string',
-			'mode' => 'in immediate,flag'
+			'mode' => 'in immediate,flag,approve,reject'
 		];
 
 		$ret = $this->validateInput($fields);
@@ -50,6 +52,27 @@ class UserPolicyExecute extends CController {
 		return @file_put_contents(self::APPROVAL_QUEUE_FILE, json_encode($queue, JSON_PRETTY_PRINT)) !== false;
 	}
 
+	private static function loadDisabledLog(): array {
+		if (!is_file(self::DISABLED_LOG_FILE)) {
+			return [];
+		}
+		$raw = @file_get_contents(self::DISABLED_LOG_FILE);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function saveDisabledLog(array $log): bool {
+		$dir = dirname(self::DISABLED_LOG_FILE);
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		return @file_put_contents(self::DISABLED_LOG_FILE, json_encode($log, JSON_PRETTY_PRINT)) !== false;
+	}
+
+	private static function currentActor(): string {
+		return \CWebUser::$data['username'] ?? 'unknown';
+	}
+
 	/**
 	 * Zabbix has no per-user "disabled" flag reachable via user.update. A user is
 	 * disabled when ANY of their user groups has users_status = GROUP_STATUS_DISABLED (1).
@@ -77,6 +100,51 @@ class UserPolicyExecute extends CController {
 		return $created['usrgrpids'][0];
 	}
 
+	/**
+	 * Disables the given users (via group membership, see above) and appends one
+	 * disabled_log.json entry per user recording who/why, so it can be exported later.
+	 */
+	private static function disableUsers(array $userids, string $comment, string $actor): void {
+		$disabled_usrgrpid = self::getOrCreateDisabledUsrgrp();
+		$log = self::loadDisabledLog();
+		$now = time();
+
+		foreach ($userids as $userid) {
+			$user = API::User()->get([
+				'output' => ['userid', 'username'],
+				'selectUsrgrps' => ['usrgrpid'],
+				'userids' => [$userid]
+			]);
+
+			if (!$user) {
+				continue;
+			}
+
+			$usrgrpids = array_column($user[0]['usrgrps'], 'usrgrpid');
+
+			if (!in_array($disabled_usrgrpid, $usrgrpids, true)) {
+				$usrgrpids[] = $disabled_usrgrpid;
+			}
+
+			API::User()->update([
+				'userid' => $userid,
+				'usrgrps' => array_map(function ($id) {
+					return ['usrgrpid' => $id];
+				}, $usrgrpids)
+			]);
+
+			$log[] = [
+				'userid' => (string) $userid,
+				'username' => $user[0]['username'],
+				'comment' => $comment,
+				'actor' => $actor,
+				'clock' => $now
+			];
+		}
+
+		self::saveDisabledLog($log);
+	}
+
 	private function respondJson(bool $success, string $message, array $extra = []): void {
 		header('Content-Type: application/json');
 		echo json_encode(array_merge([
@@ -91,15 +159,15 @@ class UserPolicyExecute extends CController {
 		$userids = $this->getInput('userids', []);
 		$comment = trim($this->getInput('comment', ''));
 		$mode = $this->getInput('mode', 'immediate');
-
-		if (!$userids) {
-			$this->respondJson(false, _('No users selected.'));
-		}
+		$actor = self::currentActor();
 
 		if ($mode === 'flag') {
+			if (!$userids) {
+				$this->respondJson(false, _('No users selected.'));
+			}
+
 			$queue = self::loadQueue();
 			$now = time();
-			$actor = $this->getUserType() !== null ? \CWebUser::$data['username'] ?? 'unknown' : 'unknown';
 
 			foreach ($userids as $userid) {
 				$queue[] = [
@@ -118,38 +186,70 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Users flagged for approval.'), ['count' => count($userids)]);
 		}
 
+		if ($mode === 'approve') {
+			$queue_index = $this->getInput('queue_index', null);
+
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
+			}
+
+			$queue = self::loadQueue();
+
+			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
+				$this->respondJson(false, _('This request is no longer pending.'));
+			}
+
+			$entry = $queue[$queue_index];
+			$final_comment = $comment !== '' ? $comment : ($entry['comment'] ?? '');
+
+			try {
+				self::disableUsers([$entry['userid']], $final_comment, $actor);
+			}
+			catch (\Exception $e) {
+				$this->respondJson(false, $e->getMessage());
+			}
+
+			$queue[$queue_index]['status'] = 'disabled';
+			$queue[$queue_index]['resolved_by'] = $actor;
+			$queue[$queue_index]['resolved_at'] = time();
+			self::saveQueue($queue);
+
+			$this->respondJson(true, _('User disabled.'));
+		}
+
+		if ($mode === 'reject') {
+			$queue_index = $this->getInput('queue_index', null);
+
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
+			}
+
+			$queue = self::loadQueue();
+
+			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
+				$this->respondJson(false, _('This request is no longer pending.'));
+			}
+
+			$queue[$queue_index]['status'] = 'rejected';
+			$queue[$queue_index]['resolved_by'] = $actor;
+			$queue[$queue_index]['resolved_at'] = time();
+			$queue[$queue_index]['reject_reason'] = $comment;
+			self::saveQueue($queue);
+
+			$this->respondJson(true, _('Request rejected.'));
+		}
+
 		// mode === 'immediate': disable now, comment required as Request No./justification
+		if (!$userids) {
+			$this->respondJson(false, _('No users selected.'));
+		}
+
 		if ($comment === '') {
 			$this->respondJson(false, _('A Request No. / comment is required to disable users.'));
 		}
 
 		try {
-			$disabled_usrgrpid = self::getOrCreateDisabledUsrgrp();
-
-			foreach ($userids as $userid) {
-				$user = API::User()->get([
-					'output' => ['userid'],
-					'selectUsrgrps' => ['usrgrpid'],
-					'userids' => [$userid]
-				]);
-
-				if (!$user) {
-					continue;
-				}
-
-				$usrgrpids = array_column($user[0]['usrgrps'], 'usrgrpid');
-
-				if (!in_array($disabled_usrgrpid, $usrgrpids, true)) {
-					$usrgrpids[] = $disabled_usrgrpid;
-				}
-
-				API::User()->update([
-					'userid' => $userid,
-					'usrgrps' => array_map(function ($id) {
-						return ['usrgrpid' => $id];
-					}, $usrgrpids)
-				]);
-			}
+			self::disableUsers($userids, $comment, $actor);
 		}
 		catch (\Exception $e) {
 			$this->respondJson(false, $e->getMessage());
@@ -161,6 +261,7 @@ class UserPolicyExecute extends CController {
 			if (in_array((string) $entry['userid'], array_map('strval', $userids), true) && $entry['status'] === 'pending') {
 				$entry['status'] = 'disabled';
 				$entry['resolved_comment'] = $comment;
+				$entry['resolved_by'] = $actor;
 				$entry['resolved_at'] = time();
 			}
 		}

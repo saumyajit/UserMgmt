@@ -69,6 +69,19 @@ class UserPolicy extends CController {
 		return is_array($decoded) ? $decoded : [];
 	}
 
+	private static function loadDisabledLog(): array {
+		$file = __DIR__ . '/../data/disabled_log.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
 	protected function doAction(): void {
 		$config = self::loadConfig();
 		$now = time();
@@ -138,10 +151,29 @@ class UserPolicy extends CController {
 
 		$approval_queue = self::loadApprovalQueue();
 		$pending_userids = [];
-		foreach ($approval_queue as $entry) {
+		foreach ($approval_queue as $index => $entry) {
 			if (($entry['status'] ?? '') === 'pending') {
 				$pending_userids[(string) $entry['userid']] = $entry;
 			}
+		}
+
+		// Newest-first list of pending entries for the approvals panel, each tagged
+		// with its index in the queue file so approve/reject can address it directly.
+		$pending_queue = [];
+		foreach ($approval_queue as $index => $entry) {
+			if (($entry['status'] ?? '') === 'pending') {
+				$entry['queue_index'] = $index;
+				$pending_queue[] = $entry;
+			}
+		}
+		usort($pending_queue, function ($a, $b) {
+			return ($b['flagged_at'] ?? 0) <=> ($a['flagged_at'] ?? 0);
+		});
+
+		$disabled_log = self::loadDisabledLog();
+		$disable_comments = [];
+		foreach ($disabled_log as $entry) {
+			$disable_comments[(string) $entry['userid']] = $entry;
 		}
 
 		/*
@@ -211,6 +243,9 @@ class UserPolicy extends CController {
 			$user['reason'] = $reason;
 			$user['pending_approval'] = isset($pending_userids[$userid]);
 			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
+			$user['disable_comment'] = $disable_comments[$userid]['comment'] ?? null;
+			$user['disabled_by'] = $disable_comments[$userid]['actor'] ?? null;
+			$user['disabled_at'] = $disable_comments[$userid]['clock'] ?? null;
 		}
 		unset($user);
 
@@ -238,7 +273,8 @@ class UserPolicy extends CController {
 			'users' => $users,
 			'login_logs' => array_slice($login_logs, 0, 50),
 			'config' => $config,
-			'summary' => $summary
+			'summary' => $summary,
+			'pending_queue' => $pending_queue
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
