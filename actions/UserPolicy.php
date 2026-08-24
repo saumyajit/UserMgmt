@@ -86,6 +86,7 @@ class UserPolicy extends CController {
 				'surname',
 				'roleid'
 			],
+			'selectUsrgrps' => ['usrgrpid', 'users_status'],
 			'sortfield' => 'username',
 			'sortorder' => ZBX_SORT_UP
 		]);
@@ -177,7 +178,19 @@ class UserPolicy extends CController {
 			$inactive_past_threshold = $last_login_age_days !== null
 				&& $last_login_age_days > $config['inactivity_threshold_days'];
 
-			if (($account_old_enough || $account_age_unknown) && ($never_logged_in || $inactive_past_threshold)) {
+			$already_disabled = false;
+			foreach ($user['usrgrps'] as $usrgrp) {
+				if ((int) $usrgrp['users_status'] === GROUP_STATUS_DISABLED) {
+					$already_disabled = true;
+					break;
+				}
+			}
+
+			if ($already_disabled) {
+				$recommendation = 'no_action';
+				$reason = 'already_disabled';
+			}
+			elseif (($account_old_enough || $account_age_unknown) && ($never_logged_in || $inactive_past_threshold)) {
 				$recommendation = 'disable';
 				$reason = $never_logged_in ? 'never_logged_in' : 'inactive';
 			}

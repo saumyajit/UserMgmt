@@ -136,11 +136,13 @@ button.umg-btn-danger:hover { background: #c43e3e; }
 
 	$activity_class = 'umg-badge-ok';
 	$activity_label = _('Active');
-	if ($user['reason'] === 'never_logged_in') { $activity_class = 'umg-badge-danger'; $activity_label = _('Never Logged In'); }
+	if ($user['reason'] === 'already_disabled') { $activity_class = 'umg-badge-info'; $activity_label = _('Already Disabled'); }
+	elseif ($user['reason'] === 'never_logged_in') { $activity_class = 'umg-badge-danger'; $activity_label = _('Never Logged In'); }
 	elseif ($user['reason'] === 'inactive') { $activity_class = 'umg-badge-danger'; $activity_label = _('Inactive'); }
 	elseif ($user['reason'] === 'new_account') { $activity_class = 'umg-badge-info'; $activity_label = _('New Account'); }
 
 	if ($user['pending_approval']) { $rec_class = 'umg-badge-warning'; $rec_label = _('Pending Approval'); }
+	elseif ($user['reason'] === 'already_disabled') { $rec_class = 'umg-badge-info'; $rec_label = _('Already Disabled'); }
 	elseif ($user['recommendation'] === 'disable') { $rec_class = 'umg-badge-danger'; $rec_label = _('Disable'); }
 	else { $rec_class = 'umg-badge-ok'; $rec_label = _('No Action'); }
 
