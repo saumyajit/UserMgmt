@@ -17,7 +17,8 @@ class UserPolicyConfig extends CController {
 	protected function checkInput(): bool {
 		$fields = [
 			'min_account_age_days' => 'int32|ge 0|le 3650',
-			'inactivity_threshold_days' => 'int32|ge 0|le 3650'
+			'inactivity_threshold_days' => 'int32|ge 0|le 3650',
+			'approvers' => 'string'
 		];
 
 		$ret = $this->validateInput($fields);
@@ -44,9 +45,15 @@ class UserPolicyConfig extends CController {
 	}
 
 	protected function doAction(): void {
+		$approvers_raw = trim($this->getInput('approvers', ''));
+		$approvers = $approvers_raw === '' ? [] : array_values(array_unique(array_filter(
+			array_map('trim', explode(',', $approvers_raw))
+		)));
+
 		$config = [
 			'min_account_age_days' => $this->getInput('min_account_age_days', self::DEFAULT_MIN_ACCOUNT_AGE_DAYS),
-			'inactivity_threshold_days' => $this->getInput('inactivity_threshold_days', self::DEFAULT_INACTIVITY_THRESHOLD_DAYS)
+			'inactivity_threshold_days' => $this->getInput('inactivity_threshold_days', self::DEFAULT_INACTIVITY_THRESHOLD_DAYS),
+			'approvers' => $approvers
 		];
 
 		$dir = dirname(self::CONFIG_FILE);

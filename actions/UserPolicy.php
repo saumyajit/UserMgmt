@@ -52,7 +52,10 @@ class UserPolicy extends CController {
 				: $defaults['min_account_age_days'],
 			'inactivity_threshold_days' => isset($decoded['inactivity_threshold_days'])
 				? (int) $decoded['inactivity_threshold_days']
-				: $defaults['inactivity_threshold_days']
+				: $defaults['inactivity_threshold_days'],
+			'approvers' => isset($decoded['approvers']) && is_array($decoded['approvers'])
+				? $decoded['approvers']
+				: []
 		];
 	}
 
@@ -71,6 +74,19 @@ class UserPolicy extends CController {
 
 	private static function loadDisabledLog(): array {
 		$file = __DIR__ . '/../data/disabled_log.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function loadActivityLog(): array {
+		$file = __DIR__ . '/../data/activity_log.json';
 
 		if (!is_file($file)) {
 			return [];
@@ -171,10 +187,29 @@ class UserPolicy extends CController {
 		});
 
 		$disabled_log = self::loadDisabledLog();
+		$activity_log = self::loadActivityLog();
+
+		// Per-user "current" comment: newest matching entry across both the legacy
+		// disabled_log.json and the current activity_log.json, action=disable/approve only.
 		$disable_comments = [];
 		foreach ($disabled_log as $entry) {
 			$disable_comments[(string) $entry['userid']] = $entry;
 		}
+		foreach ($activity_log as $entry) {
+			if (in_array($entry['action'] ?? '', ['disable', 'approve'], true)) {
+				$existing = $disable_comments[(string) $entry['userid']] ?? null;
+				if (!$existing || ($entry['clock'] ?? 0) >= ($existing['clock'] ?? 0)) {
+					$disable_comments[(string) $entry['userid']] = $entry;
+				}
+			}
+		}
+
+		// Newest-first slice for the on-page Activity Log panel.
+		$activity_log_display = $activity_log;
+		usort($activity_log_display, function ($a, $b) {
+			return ($b['clock'] ?? 0) <=> ($a['clock'] ?? 0);
+		});
+		$activity_log_display = array_slice($activity_log_display, 0, 100);
 
 		/*
 		 * ------------------------------------------------------------
@@ -274,7 +309,8 @@ class UserPolicy extends CController {
 			'login_logs' => array_slice($login_logs, 0, 50),
 			'config' => $config,
 			'summary' => $summary,
-			'pending_queue' => $pending_queue
+			'pending_queue' => $pending_queue,
+			'activity_log' => $activity_log_display
 		];
 
 		$this->setResponse(new CControllerResponseData($data));

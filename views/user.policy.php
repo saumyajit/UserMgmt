@@ -7,10 +7,24 @@
 $config = $data['config'];
 $summary = $data['summary'];
 $pending_queue = $data['pending_queue'];
+$activity_log = $data['activity_log'];
 
 function umg_esc($v) {
 	return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 }
+
+$action_labels = [
+	'flag' => _('Flagged for approval'),
+	'disable' => _('Disabled'),
+	'approve' => _('Approved & disabled'),
+	'reject' => _('Rejected')
+];
+$action_classes = [
+	'flag' => 'umg-badge-warning',
+	'disable' => 'umg-badge-danger',
+	'approve' => 'umg-badge-danger',
+	'reject' => 'umg-badge-info'
+];
 ?>
 <h1><?= umg_esc($data['title']) ?></h1>
 
@@ -29,15 +43,20 @@ function umg_esc($v) {
 .umg-panel h2 { font-size: 15px; font-weight: 700; margin: 0 0 14px 0; color: #1f2937; }
 .umg-panel h2 .umg-count-pill { display: inline-block; background: #eef1f4; color: #4b5563; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
 
+.umg-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; align-items: start; }
+.umg-row-2col .umg-panel { margin-bottom: 0; height: 100%; }
+@media (max-width: 1100px) { .umg-row-2col { grid-template-columns: 1fr; } }
+
 .umg-filter-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .umg-filter { display: flex; flex-direction: column; gap: 5px; }
 .umg-filter label { font-size: 11px; color: #5f6b78; font-weight: 600; }
 .umg-filter select, .umg-filter input { height: 32px; border: 1px solid #c7cdd4; border-radius: 4px; padding: 0 9px; min-width: 170px; font-size: 13px; }
 .umg-filter select:focus, .umg-filter input:focus { outline: none; border-color: #2f7dd1; box-shadow: 0 0 0 3px rgba(47,125,209,0.12); }
+.umg-filter-wide input { min-width: 260px; }
 
-.umg-table-wrap { overflow-x: auto; }
+.umg-table-wrap { overflow: auto; max-height: 520px; border: 1px solid #eef0f2; border-radius: 4px; }
 .umg-table { width: 100%; border-collapse: collapse; }
-.umg-table th { position: sticky; top: 0; background: #f6f7f9; text-align: left; padding: 9px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #4b5563; border-bottom: 2px solid #e1e5ea; white-space: nowrap; }
+.umg-table th { position: sticky; top: 0; background: #f6f7f9; text-align: left; padding: 9px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #4b5563; border-bottom: 2px solid #e1e5ea; white-space: nowrap; z-index: 1; }
 .umg-table td { padding: 9px 10px; border-bottom: 1px solid #eef0f2; font-size: 13px; vertical-align: middle; }
 .umg-table tbody tr { transition: background-color .1s ease; }
 .umg-table tbody tr:hover { background: #f8fafc; }
@@ -46,16 +65,16 @@ function umg_esc($v) {
 .umg-subtext { display: block; font-size: 11px; color: #7b8490; margin-top: 1px; }
 .umg-comment-text { font-size: 12px; color: #4b5563; max-width: 220px; white-space: normal; }
 
-.umg-badge { display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.umg-badge { display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .umg-badge-danger { background: #fde8e8; color: #b42323; }
 .umg-badge-warning { background: #fff4d6; color: #8a6200; }
 .umg-badge-ok { background: #e6f6ed; color: #176b3a; }
 .umg-badge-info { background: #e8f1fb; color: #175a9d; }
 
-.umg-results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
-.umg-results-header span { color: #6b7280; font-size: 12px; }
-.umg-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
-.umg-bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.umg-results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+.umg-results-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.umg-results-header span.umg-match-count { color: #6b7280; font-size: 12px; }
+.umg-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .umg-modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); z-index: 9999; align-items: center; justify-content: center; }
 .umg-modal-backdrop.umg-open { display: flex; }
@@ -84,6 +103,14 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 .umg-approval-comment { font-size: 12px; color: #4b5563; margin-top: 4px; background: #f6f7f9; border-radius: 4px; padding: 6px 9px; }
 .umg-approval-flagged { font-size: 11px; color: #8a94a3; margin-top: 4px; }
 .umg-approval-actions { display: flex; gap: 8px; align-items: center; }
+
+.umg-log-wrap { max-height: 260px; overflow-y: auto; border: 1px solid #eef0f2; border-radius: 4px; }
+.umg-log-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 9px 12px; border-bottom: 1px solid #eef0f2; }
+.umg-log-item:last-child { border-bottom: none; }
+.umg-log-meta { flex: 1; min-width: 0; }
+.umg-log-comment { font-size: 12px; color: #4b5563; margin-top: 2px; }
+.umg-log-actor { font-size: 11px; color: #8a94a3; margin-top: 2px; }
+.umg-log-time { font-size: 11px; color: #8a94a3; white-space: nowrap; padding-top: 2px; }
 </style>
 
 <div class="umg-cards">
@@ -123,48 +150,78 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 			</div>
 		</div>
 		<div class="umg-approval-actions">
-			<button type="button" class="umg-btn umg-btn-sm umg-btn-ghost umg-reject-btn" data-index="<?= umg_esc($entry['queue_index']) ?>"><?= _('Reject') ?></button>
-			<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn" data-index="<?= umg_esc($entry['queue_index']) ?>"><?= _('Approve & Disable') ?></button>
+			<button type="button" class="umg-btn umg-btn-sm umg-btn-ghost umg-reject-btn" data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username'] ?? '') ?>"><?= _('Reject') ?></button>
+			<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn" data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username'] ?? '') ?>"><?= _('Approve & Disable') ?></button>
 		</div>
 	</div>
 <?php endforeach; ?>
 </div>
 <?php endif; ?>
 
-<div class="umg-panel">
-	<h2><?= _('Filter Users') ?></h2>
-	<div class="umg-filter-row">
-		<div class="umg-filter">
-			<label><?= _('User') ?></label>
-			<input type="text" id="umg-filter-username" placeholder="<?= _('Username') ?>">
+<div class="umg-row-2col">
+	<div class="umg-panel">
+		<h2><?= _('Filter Users') ?></h2>
+		<div class="umg-filter-row">
+			<div class="umg-filter umg-filter-wide">
+				<label><?= _('User') ?></label>
+				<input type="text" id="umg-filter-username" placeholder="<?= _('Username') ?>">
+			</div>
+			<div class="umg-filter">
+				<label><?= _('Activity') ?></label>
+				<select id="umg-filter-activity">
+					<option value=""><?= _('All Users') ?></option>
+					<option value="never_logged_in"><?= _('Never Logged In') ?></option>
+					<option value="inactive"><?= _('Inactive') ?></option>
+					<option value="active"><?= _('Active') ?></option>
+					<option value="new_account"><?= _('New Account') ?></option>
+					<option value="already_disabled"><?= _('Already Disabled') ?></option>
+				</select>
+			</div>
+			<div class="umg-filter">
+				<label><?= _('Recommendation') ?></label>
+				<select id="umg-filter-recommendation">
+					<option value=""><?= _('All') ?></option>
+					<option value="disable"><?= _('Disable') ?></option>
+					<option value="no_action"><?= _('No Action') ?></option>
+				</select>
+			</div>
+			<button type="button" class="umg-btn" id="umg-filter-reset"><?= _('Reset') ?></button>
 		</div>
-		<div class="umg-filter">
-			<label><?= _('Activity') ?></label>
-			<select id="umg-filter-activity">
-				<option value=""><?= _('All Users') ?></option>
-				<option value="never_logged_in"><?= _('Never Logged In') ?></option>
-				<option value="inactive"><?= _('Inactive') ?></option>
-				<option value="active"><?= _('Active') ?></option>
-				<option value="new_account"><?= _('New Account') ?></option>
-				<option value="already_disabled"><?= _('Already Disabled') ?></option>
-			</select>
+	</div>
+
+	<div class="umg-panel">
+		<h2><?= _('Inactivity Policy (configurable)') ?></h2>
+		<div class="umg-filter-row">
+			<div class="umg-filter">
+				<label><?= _('Min. Account Age (days)') ?></label>
+				<input type="number" min="0" id="umg-cfg-min-age" value="<?= umg_esc($config['min_account_age_days']) ?>">
+			</div>
+			<div class="umg-filter">
+				<label><?= _('Inactivity Threshold (days)') ?></label>
+				<input type="number" min="0" id="umg-cfg-threshold" value="<?= umg_esc($config['inactivity_threshold_days']) ?>">
+			</div>
 		</div>
-		<div class="umg-filter">
-			<label><?= _('Recommendation') ?></label>
-			<select id="umg-filter-recommendation">
-				<option value=""><?= _('All') ?></option>
-				<option value="disable"><?= _('Disable') ?></option>
-				<option value="no_action"><?= _('No Action') ?></option>
-			</select>
+		<div class="umg-filter-row" style="margin-top:12px;">
+			<div class="umg-filter umg-filter-wide" style="flex:1;">
+				<label><?= _('Approvers (comma-separated usernames; empty = any Super Admin)') ?></label>
+				<input type="text" id="umg-cfg-approvers" placeholder="<?= _('e.g. jane.doe, alex.k') ?>" value="<?= umg_esc(implode(', ', $config['approvers'])) ?>">
+			</div>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-cfg-save"><?= _('Save Policy') ?></button>
 		</div>
-		<button type="button" class="umg-btn" id="umg-filter-reset"><?= _('Reset') ?></button>
 	</div>
 </div>
 
 <div class="umg-panel">
 	<div class="umg-results-header">
-		<h2 style="margin:0;"><?= _('Inactive User Review') ?></h2>
-		<span id="umg-match-count"></span>
+		<div class="umg-results-header-left">
+			<h2 style="margin:0;"><?= _('Inactive User Review') ?></h2>
+			<span class="umg-match-count" id="umg-match-count"></span>
+		</div>
+		<div class="umg-toolbar">
+			<button type="button" class="umg-btn" id="umg-export-csv"><?= _('Export CSV') ?></button>
+			<button type="button" class="umg-btn" id="umg-flag-selected"><?= _('Flag Selected for Approval') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected"><?= _('Disable Selected Users') ?></button>
+		</div>
 	</div>
 
 	<div class="umg-table-wrap">
@@ -250,29 +307,36 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 	<div class="umg-empty-state"><?= _('No users found.') ?></div>
 	<?php endif; ?>
 
-	<div class="umg-footer">
-		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;"></div>
-		<div class="umg-bulk-actions">
-			<button type="button" class="umg-btn" id="umg-export-csv"><?= _('Export CSV') ?></button>
-			<button type="button" class="umg-btn" id="umg-flag-selected"><?= _('Flag Selected for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected"><?= _('Disable Selected Users') ?></button>
-		</div>
+	<div class="umg-footer" style="margin-top:12px;">
+		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;margin-bottom:0;"></div>
 	</div>
 </div>
 
 <div class="umg-panel">
-	<h2><?= _('Inactivity Policy (configurable)') ?></h2>
-	<div class="umg-filter-row">
-		<div class="umg-filter">
-			<label><?= _('Minimum Account Age (days)') ?></label>
-			<input type="number" min="0" id="umg-cfg-min-age" value="<?= umg_esc($config['min_account_age_days']) ?>">
+	<h2><?= _('Activity Log') ?> <span class="umg-count-pill"><?= count($activity_log) ?></span></h2>
+	<?php if ($activity_log): ?>
+	<div class="umg-log-wrap">
+	<?php foreach ($activity_log as $entry): ?>
+	<?php
+		$badge_class = $action_classes[$entry['action']] ?? 'umg-badge-info';
+		$badge_label = $action_labels[$entry['action']] ?? $entry['action'];
+	?>
+		<div class="umg-log-item">
+			<div class="umg-log-meta">
+				<span class="umg-badge <?= $badge_class ?>"><?= umg_esc($badge_label) ?></span>
+				<strong><?= umg_esc($entry['username'] ?? ('User ID: ' . ($entry['userid'] ?? ''))) ?></strong>
+				<?php if (!empty($entry['comment'])): ?>
+				<div class="umg-log-comment"><?= umg_esc($entry['comment']) ?></div>
+				<?php endif; ?>
+				<div class="umg-log-actor"><?= _('By') ?> <?= umg_esc($entry['actor'] ?? '—') ?></div>
+			</div>
+			<div class="umg-log-time"><?= !empty($entry['clock']) ? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])) : '' ?></div>
 		</div>
-		<div class="umg-filter">
-			<label><?= _('Inactivity Threshold (days)') ?></label>
-			<input type="number" min="0" id="umg-cfg-threshold" value="<?= umg_esc($config['inactivity_threshold_days']) ?>">
-		</div>
-		<button type="button" class="umg-btn umg-btn-primary" id="umg-cfg-save"><?= _('Save Policy') ?></button>
+	<?php endforeach; ?>
 	</div>
+	<?php else: ?>
+	<div class="umg-empty-state"><?= _('No activity recorded yet.') ?></div>
+	<?php endif; ?>
 </div>
 
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
@@ -285,6 +349,19 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 			<button type="button" class="umg-btn" id="umg-modal-cancel"><?= _('Cancel') ?></button>
 			<button type="button" class="umg-btn" id="umg-modal-flag"><?= _('Flag for Approval') ?></button>
 			<button type="button" class="umg-btn umg-btn-danger" id="umg-modal-confirm"><?= _('Disable Now') ?></button>
+		</div>
+	</div>
+</div>
+
+<div class="umg-modal-backdrop" id="umg-approve-modal-backdrop">
+	<div class="umg-modal">
+		<h3><?= _('Approve & Disable') ?></h3>
+		<div class="umg-card-title" id="umg-approve-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
+		<label><?= _('Approval Comment (optional — added to the requester\'s comment)') ?></label>
+		<textarea rows="3" id="umg-approve-comment"></textarea>
+		<div class="umg-modal-actions">
+			<button type="button" class="umg-btn" id="umg-approve-cancel"><?= _('Cancel') ?></button>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-approve-confirm"><?= _('Approve & Disable') ?></button>
 		</div>
 	</div>
 </div>
@@ -422,14 +499,29 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 		closeModal();
 	});
 
-	// Approve / reject pending requests
+	// Approve (with optional comment)
+	var approveBackdrop = document.getElementById('umg-approve-modal-backdrop');
+	var approveUserlist = document.getElementById('umg-approve-modal-userlist');
+	var approveComment = document.getElementById('umg-approve-comment');
+	var approveIndex = null;
+
 	document.querySelectorAll('.umg-approve-btn').forEach(function (btn) {
 		btn.addEventListener('click', function () {
-			if (!confirm('Disable this user now?')) return;
-			submitAction({ mode: 'approve', queue_index: btn.getAttribute('data-index') });
+			approveIndex = btn.getAttribute('data-index');
+			approveUserlist.textContent = btn.getAttribute('data-username') || '';
+			approveComment.value = '';
+			approveBackdrop.classList.add('umg-open');
 		});
 	});
+	document.getElementById('umg-approve-cancel').addEventListener('click', function () {
+		approveBackdrop.classList.remove('umg-open');
+	});
+	document.getElementById('umg-approve-confirm').addEventListener('click', function () {
+		submitAction({ mode: 'approve', queue_index: approveIndex, comment: approveComment.value.trim() });
+		approveBackdrop.classList.remove('umg-open');
+	});
 
+	// Reject (with optional reason)
 	var rejectBackdrop = document.getElementById('umg-reject-modal-backdrop');
 	var rejectComment = document.getElementById('umg-reject-comment');
 	var rejectIndex = null;
@@ -453,6 +545,7 @@ button.umg-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
 		var body = new URLSearchParams();
 		body.append('min_account_age_days', document.getElementById('umg-cfg-min-age').value);
 		body.append('inactivity_threshold_days', document.getElementById('umg-cfg-threshold').value);
+		body.append('approvers', document.getElementById('umg-cfg-approvers').value);
 
 		fetch('zabbix.php?action=user.policy.config', {
 			method: 'POST',
