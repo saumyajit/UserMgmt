@@ -825,7 +825,6 @@ button.umg-btn-sm {
 }
 
 .umg-btn-icon {
-    margin-right: -2px;
     margin-right: -5px;
 }
 
@@ -1197,7 +1196,7 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-toolbar">
 			<button type="button" class="umg-btn" id="umg-flag-selected">&#9873; <?= _('Request for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable User/s') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable Users') ?></button>
 		</div>
 	</div>
 
@@ -1213,7 +1212,6 @@ button.umg-btn-sm {
 					<th><?= _('Inactive For') ?></th>
 					<th><?= _('Activity') ?></th>
 					<th><?= _('Recommendation') ?></th>
-					<th><?= _('Comment') ?></th>
 					<th><?= _('Action') ?></th>
 				</tr>
 			</thead>
@@ -1267,6 +1265,8 @@ button.umg-btn-sm {
 
 					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'];
 
+					// Comment/audit fields are still computed (needed for the CSV export)
+					// even though the visible "Comment" column has been removed below.
 					if ($user['pending_approval']) {
 						$comment_text = trim((string) ($user['pending_comment'] ?? ''));
 						$comment_tag = $action_labels['flag'];
@@ -1288,7 +1288,8 @@ button.umg-btn-sm {
 					}
 					?>
 					<tr data-userid="<?= umg_esc($user['userid']) ?>" data-username="<?= umg_esc(mb_strtolower($user['username'])) ?>"
-						data-activity="<?= umg_esc($user['reason']) ?>" data-recommendation="<?= umg_esc($user['recommendation']) ?>">
+						data-activity="<?= umg_esc($user['reason']) ?>" data-recommendation="<?= umg_esc($user['recommendation']) ?>"
+						data-csv-comment="<?= umg_esc($comment_csv) ?>">
 						<td><?php if ($can_act): ?><input type="checkbox" class="umg-row-checkbox"><?php endif; ?></td>
 						<td>
 							<div class="umg-username"><?= umg_esc($user['username']) ?></div>
@@ -1300,14 +1301,6 @@ button.umg-btn-sm {
 						<td><?= umg_esc($inactive_for) ?></td>
 						<td><span class="umg-badge <?= $activity_class ?>"><?= umg_esc($activity_label) ?></span></td>
 						<td><span class="umg-badge <?= $rec_class ?>"><?= umg_esc($rec_label) ?></span></td>
-						<td class="umg-comment-text" data-csv-comment="<?= umg_esc($comment_csv) ?>">
-							<?php if ($comment_text !== ''): ?>
-								<?php if ($comment_tag !== ''): ?><span class="umg-comment-tag"><?= umg_esc($comment_tag) ?></span><?php endif; ?>
-								<?= umg_esc($comment_text) ?>
-							<?php else: ?>
-								-
-							<?php endif; ?>
-						</td>
 						<td>
 							<?php if ($can_act): ?>
 							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-disable-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Disable') ?></button>
@@ -1947,6 +1940,9 @@ button.umg-btn-sm {
 	});
 
 	// CSV export of currently-visible rows, including the resolved activity comment.
+	// NEW: comment is now pulled from the row's own "data-csv-comment" attribute
+	// (set on <tr>) instead of a removed comment <td> — the visible column is
+	// gone, but the exported data is unchanged.
 	function csvSafe(text) {
 		text = String(text == null ? '' : text).trim();
 		if (text === '' || text === '\u2014' || text === '\u2013' || text === '-') {
@@ -1972,8 +1968,7 @@ button.umg-btn-sm {
 			var cells = row.querySelectorAll('td');
 			var username = cells[1].querySelector('.umg-username').textContent.trim();
 			var userid = row.getAttribute('data-userid');
-			var commentCell = cells[8];
-			var comment = commentCell ? commentCell.getAttribute('data-csv-comment') : '';
+			var comment = row.getAttribute('data-csv-comment') || '';
 			var fields = [username, userid, cells[2].textContent.trim(), cells[3].textContent.trim(),
 				cells[4].textContent.trim(), cells[5].textContent.trim(), cells[6].textContent.trim(),
 				cells[7].textContent.trim(), comment];
