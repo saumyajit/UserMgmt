@@ -17,10 +17,16 @@ class UserPolicyExecute extends CController {
 
 	protected function checkInput(): bool {
 		$fields = [
+			// NEW: 'immediate' removed entirely. Disabling a user is no longer
+			// possible in a single step — it now requires a two-person flow:
+			// 'flag' (raise), 'approve' (a Super Admin approves — does NOT
+			// disable), then 'disable_approved' (a DIFFERENT Super Admin
+			// performs the actual disable). 'reject' is terminal: once
+			// rejected, disable_approved can never succeed for that request.
 			'userids' => 'array_id',
 			'queue_index' => 'int32',
 			'comment' => 'string',
-			'mode' => 'in immediate,flag,approve,reject'
+			'mode' => 'in flag,approve,reject,disable_approved'
 		];
 
 		$ret = $this->validateInput($fields);
@@ -40,6 +46,7 @@ class UserPolicyExecute extends CController {
 		if (!is_file($file)) {
 			return [];
 		}
+
 		$raw = @file_get_contents($file);
 		$decoded = $raw !== false ? json_decode($raw, true) : null;
 		return is_array($decoded) ? $decoded : [];
@@ -50,6 +57,7 @@ class UserPolicyExecute extends CController {
 		if (!is_dir($dir)) {
 			@mkdir($dir, 0755, true);
 		}
+
 		return @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT)) !== false;
 	}
 
@@ -63,9 +71,9 @@ class UserPolicyExecute extends CController {
 
 	/**
 	 * Single append-only trail of every comment/action taken through this module —
-	 * flag, disable, approve, reject — independent of Zabbix's own audit log (which
+	 * flag, approve, reject, disable — independent of Zabbix's own audit log (which
 	 * has no room for our comments). UserPolicy.php reads this to show the "Comment"
-	 * column and a scrollable Activity Log panel.
+	 * column and the Audit Log popup.
 	 */
 	private static function logActivity(string $action, string $userid, string $username, string $comment, string $actor, array $extra = []): void {
 		$log = self::loadJsonFile(self::ACTIVITY_LOG_FILE);
@@ -150,14 +158,14 @@ class UserPolicyExecute extends CController {
 
 			if (!in_array($disabled_usrgrpid, $usrgrpids, true)) {
 				$usrgrpids[] = $disabled_usrgrpid;
-			}
 
-			API::User()->update([
-				'userid' => $userid,
-				'usrgrps' => array_map(function ($id) {
-					return ['usrgrpid' => $id];
-				}, $usrgrpids)
-			]);
+				API::User()->update([
+					'userid' => $userid,
+					'usrgrps' => array_map(function ($id) {
+						return ['usrgrpid' => $id];
+					}, $usrgrpids)
+				]);
+			}
 
 			self::logActivity($action, (string) $userid, $user[0]['username'], $comment, $actor);
 		}
@@ -176,9 +184,16 @@ class UserPolicyExecute extends CController {
 	protected function doAction(): void {
 		$userids = $this->getInput('userids', []);
 		$comment = trim($this->getInput('comment', ''));
-		$mode = $this->getInput('mode', 'immediate');
+		$mode = $this->getInput('mode', 'flag');
 		$actor = self::currentActor();
 
+		/*
+		 * ------------------------------------------------------------
+		 * FLAG: raise for approval. No permission gate beyond Super Admin
+		 * (checkPermissions) — anyone with module access can raise a
+		 * request; only an approver can move it forward from here.
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'flag') {
 			if (!$userids) {
 				$this->respondJson(false, _('No users selected.'));
@@ -210,6 +225,16 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Users flagged for approval.'), ['count' => count($userids)]);
 		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * APPROVE: an approver signs off on the request. This step
+		 * deliberately does NOT disable the user — it only changes the
+		 * queue entry's status to 'approved'. Disabling is a separate,
+		 * later step performed by a DIFFERENT Super Admin (see
+		 * 'disable_approved' below), so no single person can both approve
+		 * and execute a disable end-to-end.
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'approve') {
 			$this->enforceApproverPermission($actor);
 
@@ -225,28 +250,23 @@ class UserPolicyExecute extends CController {
 				$this->respondJson(false, _('This request is no longer pending.'));
 			}
 
-			$entry = $queue[$queue_index];
-			$approver_comment = $comment;
-			$final_comment = $approver_comment !== ''
-				? $approver_comment . ($entry['comment'] ? ' | Request: ' . $entry['comment'] : '')
-				: ($entry['comment'] ?? '');
-
-			try {
-				self::disableUsers([$entry['userid']], $final_comment, $actor, 'approve');
-			}
-			catch (\Exception $e) {
-				$this->respondJson(false, $e->getMessage());
-			}
-
-			$queue[$queue_index]['status'] = 'disabled';
-			$queue[$queue_index]['resolved_by'] = $actor;
-			$queue[$queue_index]['resolved_at'] = time();
-			$queue[$queue_index]['approver_comment'] = $approver_comment;
+			$queue[$queue_index]['status'] = 'approved';
+			$queue[$queue_index]['approved_by'] = $actor;
+			$queue[$queue_index]['approved_at'] = time();
+			$queue[$queue_index]['approver_comment'] = $comment;
 			self::saveQueue($queue);
 
-			$this->respondJson(true, _('User disabled.'));
+			self::logActivity('approve', (string) $queue[$queue_index]['userid'], $queue[$queue_index]['username'] ?? '', $comment, $actor);
+
+			$this->respondJson(true, _('Request approved. A different Super Admin must now disable the user.'));
 		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * REJECT: terminal. Once rejected, 'disable_approved' can never
+		 * succeed for this queue entry (it only accepts status 'approved').
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'reject') {
 			$this->enforceApproverPermission($actor);
 
@@ -273,35 +293,56 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Request rejected.'));
 		}
 
-		// mode === 'immediate': disable now, comment required as Request No./justification
-		if (!$userids) {
-			$this->respondJson(false, _('No users selected.'));
-		}
+		/*
+		 * ------------------------------------------------------------
+		 * DISABLE_APPROVED: the second, separate person performs the
+		 * actual disable. Requires:
+		 *   - the queue entry to currently be 'approved' (not pending,
+		 *     not already disabled, and NOT rejected — rejection is a
+		 *     dead end, this check alone blocks that case entirely);
+		 *   - the acting Super Admin to be someone OTHER than whoever
+		 *     approved it, enforced here server-side (not just hidden in
+		 *     the UI), so a single account can't both approve and disable.
+		 * ------------------------------------------------------------
+		 */
+		if ($mode === 'disable_approved') {
+			$queue_index = $this->getInput('queue_index', null);
 
-		if ($comment === '') {
-			$this->respondJson(false, _('A Request No. / comment is required to disable users.'));
-		}
-
-		try {
-			self::disableUsers($userids, $comment, $actor, 'disable');
-		}
-		catch (\Exception $e) {
-			$this->respondJson(false, $e->getMessage());
-		}
-
-		// Mark any matching pending approval entries as resolved.
-		$queue = self::loadQueue();
-		foreach ($queue as &$entry) {
-			if (in_array((string) $entry['userid'], array_map('strval', $userids), true) && $entry['status'] === 'pending') {
-				$entry['status'] = 'disabled';
-				$entry['resolved_comment'] = $comment;
-				$entry['resolved_by'] = $actor;
-				$entry['resolved_at'] = time();
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
 			}
-		}
-		unset($entry);
-		self::saveQueue($queue);
 
-		$this->respondJson(true, _('Users disabled.'), ['count' => count($userids)]);
+			$queue = self::loadQueue();
+
+			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'approved') {
+				$this->respondJson(false, _('This request is not in an approved state (it may be pending, rejected, or already disabled).'));
+			}
+
+			$entry = $queue[$queue_index];
+
+			if (($entry['approved_by'] ?? '') === $actor) {
+				$this->respondJson(false, _('You approved this request — a different Super Admin must perform the disable.'));
+			}
+
+			$final_comment = $comment !== ''
+				? $comment
+				: ($entry['approver_comment'] ?? $entry['comment'] ?? '');
+
+			try {
+				self::disableUsers([$entry['userid']], $final_comment, $actor, 'disable');
+			}
+			catch (\Exception $e) {
+				$this->respondJson(false, $e->getMessage());
+			}
+
+			$queue[$queue_index]['status'] = 'disabled';
+			$queue[$queue_index]['disabled_by'] = $actor;
+			$queue[$queue_index]['disabled_at'] = time();
+			self::saveQueue($queue);
+
+			$this->respondJson(true, _('User disabled.'));
+		}
+
+		$this->respondJson(false, _('Unknown request.'));
 	}
 }
