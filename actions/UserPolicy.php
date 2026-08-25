@@ -122,9 +122,8 @@ class UserPolicy extends CController {
 
 		/*
 		 * ------------------------------------------------------------
-		 * 1a. NEW: Resolve which of these users hold a Super Admin role,
-		 * so the "Approvers" picker on the config panel can only ever
-		 * offer Super Admins (per policy: approvers must be Super Admins).
+		 * 1a. Resolve which of these users hold a Super Admin role, so the
+		 * "Approvers" picker (Settings modal) only ever offers Super Admins.
 		 * ------------------------------------------------------------
 		 */
 		$superadmin_roles = API::Role()->get([
@@ -211,19 +210,28 @@ class UserPolicy extends CController {
 		$disabled_log = self::loadDisabledLog();
 		$activity_log = self::loadActivityLog();
 
-		// Per-user "current" comment: newest matching entry across both the legacy
-		// disabled_log.json and the current activity_log.json, action=disable/approve only.
-		$disable_comments = [];
+		/*
+		 * Per-user "latest activity" entry: newest matching entry across the
+		 * legacy disabled_log.json plus EVERY action type in activity_log.json
+		 * (flag / disable / approve / reject) — not just disable/approve as
+		 * before. Widening this is what makes the Comment column (and the CSV
+		 * export) actually populate for users whose only recorded action so
+		 * far is a flag or a rejection, instead of showing "-" for almost
+		 * everyone.
+		 */
+		$latest_activity = [];
 		foreach ($disabled_log as $entry) {
-			$disable_comments[(string) $entry['userid']] = $entry;
+			$latest_activity[(string) $entry['userid']] = $entry;
 		}
 
 		foreach ($activity_log as $entry) {
-			if (in_array($entry['action'] ?? '', ['disable', 'approve'], true)) {
-				$existing = $disable_comments[(string) $entry['userid']] ?? null;
-				if (!$existing || ($entry['clock'] ?? 0) >= ($existing['clock'] ?? 0)) {
-					$disable_comments[(string) $entry['userid']] = $entry;
-				}
+			$uid = (string) ($entry['userid'] ?? '');
+			if ($uid === '') {
+				continue;
+			}
+			$existing = $latest_activity[$uid] ?? null;
+			if (!$existing || ($entry['clock'] ?? 0) >= ($existing['clock'] ?? 0)) {
+				$latest_activity[$uid] = $entry;
 			}
 		}
 
@@ -293,6 +301,8 @@ class UserPolicy extends CController {
 				$reason = 'active';
 			}
 
+			$latest = $latest_activity[$userid] ?? null;
+
 			$user['creation_clock'] = $creation_clock;
 			$user['creation_age_days'] = $creation_age_days;
 			$user['last_login_clock'] = $last_login_clock;
@@ -301,9 +311,13 @@ class UserPolicy extends CController {
 			$user['reason'] = $reason;
 			$user['pending_approval'] = isset($pending_userids[$userid]);
 			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
-			$user['disable_comment'] = $disable_comments[$userid]['comment'] ?? null;
-			$user['disabled_by'] = $disable_comments[$userid]['actor'] ?? null;
-			$user['disabled_at'] = $disable_comments[$userid]['clock'] ?? null;
+			// NEW: last recorded activity for this user, of any action type,
+			// plus who performed it and when — used to populate the Comment
+			// column (and CSV) whenever a disable comment specifically isn't set.
+			$user['last_action'] = $latest['action'] ?? null;
+			$user['disable_comment'] = $latest['comment'] ?? null;
+			$user['disabled_by'] = $latest['actor'] ?? null;
+			$user['disabled_at'] = $latest['clock'] ?? null;
 		}
 		unset($user);
 
@@ -334,8 +348,6 @@ class UserPolicy extends CController {
 			'summary' => $summary,
 			'pending_queue' => $pending_queue,
 			'activity_log' => $activity_log_display,
-			// NEW: passed to the view so the Approvers field can render as a
-			// multi-select restricted to Super Admin accounts only.
 			'superadmins' => $superadmins
 		];
 
