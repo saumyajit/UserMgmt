@@ -1043,6 +1043,21 @@ button.umg-btn-sm {
     font-size: 12px;
     color: #8a94a3;
 }
+
+/* Developer footer */
+.developer-footer {
+    margin: 30px 0 10px;
+    padding-top: 12px;
+    border-top: 1px solid #dcdcdc;
+    text-align: center;
+    font-family: "Trebuchet MS", Tahoma, Arial, sans-serif;
+    font-size: 12px;
+    color: #666;
+}
+
+.developer-footer strong {
+    color: #1a3a5c;
+}
 </style>
 
 <div class="umg-cards">
@@ -1918,3 +1933,7 @@ button.umg-btn-sm {
 	applyFilters();
 })();
 </script>
+
+<div class="developer-footer">
+    <strong>Developed By:</strong> Saumyajit Pramanik
+</div>
