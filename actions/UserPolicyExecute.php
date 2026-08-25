@@ -16,40 +16,36 @@ class UserPolicyExecute extends CController {
 	}
 
 	protected function checkInput(): bool {
-		/*
-		 * userids is required only for flag. Approve, reject and
-		 * disable_approved address exactly one queue entry by queue_index;
-		 * requiring userids for those modes caused the "Invalid input."
-		 * error shown when clicking Disable in Ready to Disable.
-		 */
+		$mode = $this->getInput('mode', '');
+	
 		$fields = [
-			'userids' => 'array_id',
 			'queue_index' => 'int32',
 			'comment' => 'string',
 			'mode' => 'in flag,approve,reject,disable_approved'
 		];
-
+	
+		if ($mode === 'flag') {
+			$fields['userids'] = 'required|array_id';
+		}
+	
 		$ret = $this->validateInput($fields);
-
+	
 		if (!$ret) {
 			$this->respondJson(false, _('Invalid input.'));
 		}
-
-		$mode = $this->getInput('mode', '');
-		$userids = $this->getInput('userids', []);
-		$queue_index = $this->getInput('queue_index', null);
-
-		if ($mode === 'flag' && !$userids) {
+	
+		if ($mode === 'flag' && !$this->getInput('userids', [])) {
 			$this->respondJson(false, _('No users selected.'));
 		}
-
-		if (in_array($mode, ['approve', 'reject', 'disable_approved'], true) && $queue_index === null) {
+	
+		if (in_array($mode, ['approve', 'reject', 'disable_approved'], true)
+				&& $this->getInput('queue_index', null) === null) {
 			$this->respondJson(false, _('Missing approval queue reference.'));
 		}
-
+	
 		return true;
 	}
-
+	
 	protected function checkPermissions(): bool {
 		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
@@ -81,6 +77,12 @@ class UserPolicyExecute extends CController {
 		return self::saveJsonFile(self::APPROVAL_QUEUE_FILE, $queue);
 	}
 
+	/**
+	 * Single append-only trail of every comment/action taken through this module —
+	 * flag, approve, reject, disable — independent of Zabbix's own audit log (which
+	 * has no room for our comments). UserPolicy.php reads this to show the "Comment"
+	 * column and the Audit Log popup.
+	 */
 	private static function logActivity(string $action, string $userid, string $username, string $comment, string $actor, array $extra = []): void {
 		$log = self::loadJsonFile(self::ACTIVITY_LOG_FILE);
 		$log[] = array_merge([
@@ -103,6 +105,10 @@ class UserPolicyExecute extends CController {
 		return isset($config['approvers']) && is_array($config['approvers']) ? $config['approvers'] : [];
 	}
 
+	/**
+	 * If an approver allowlist has been configured, only usernames on it may approve
+	 * or reject. An empty list means "any Super Admin" (the original behaviour).
+	 */
 	private function enforceApproverPermission(string $actor): void {
 		$approvers = self::loadApprovers();
 
@@ -111,6 +117,13 @@ class UserPolicyExecute extends CController {
 		}
 	}
 
+	/**
+	 * Zabbix has no per-user "disabled" flag reachable via user.update. A user is
+	 * disabled when ANY of their user groups has users_status = GROUP_STATUS_DISABLED (1).
+	 * We reuse (or create once) a dedicated group for that, and ADD users to it rather
+	 * than replacing their existing group memberships, so re-enabling later (removing
+	 * them from this one group) doesn't lose their original group/permission setup.
+	 */
 	private static function getOrCreateDisabledUsrgrp(): string {
 		$name = 'Disabled by User Mgmt policy';
 
@@ -131,6 +144,10 @@ class UserPolicyExecute extends CController {
 		return $created['usrgrpids'][0];
 	}
 
+	/**
+	 * Disables the given users (via group membership, see above) and logs one
+	 * activity entry per user.
+	 */
 	private static function disableUsers(array $userids, string $comment, string $actor, string $action = 'disable'): void {
 		$disabled_usrgrpid = self::getOrCreateDisabledUsrgrp();
 
@@ -178,7 +195,18 @@ class UserPolicyExecute extends CController {
 		$mode = $this->getInput('mode', 'flag');
 		$actor = self::currentActor();
 
+		/*
+		 * ------------------------------------------------------------
+		 * FLAG: raise for approval. No permission gate beyond Super Admin
+		 * (checkPermissions) — anyone with module access can raise a
+		 * request; only an approver can move it forward from here.
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'flag') {
+			if (!$userids) {
+				$this->respondJson(false, _('No users selected.'));
+			}
+
 			$queue = self::loadQueue();
 			$now = time();
 
@@ -205,9 +233,25 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Users flagged for approval.'), ['count' => count($userids)]);
 		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * APPROVE: an approver signs off on the request. This step
+		 * deliberately does NOT disable the user — it only changes the
+		 * queue entry's status to 'approved'. Disabling is a separate,
+		 * later step performed by a DIFFERENT Super Admin (see
+		 * 'disable_approved' below), so no single person can both approve
+		 * and execute a disable end-to-end.
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'approve') {
 			$this->enforceApproverPermission($actor);
+
 			$queue_index = $this->getInput('queue_index', null);
+
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
+			}
+
 			$queue = self::loadQueue();
 
 			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
@@ -225,9 +269,21 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Request approved. A different Super Admin must now disable the user.'));
 		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * REJECT: terminal. Once rejected, 'disable_approved' can never
+		 * succeed for this queue entry (it only accepts status 'approved').
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'reject') {
 			$this->enforceApproverPermission($actor);
+
 			$queue_index = $this->getInput('queue_index', null);
+
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
+			}
+
 			$queue = self::loadQueue();
 
 			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
@@ -245,8 +301,25 @@ class UserPolicyExecute extends CController {
 			$this->respondJson(true, _('Request rejected.'));
 		}
 
+		/*
+		 * ------------------------------------------------------------
+		 * DISABLE_APPROVED: the second, separate person performs the
+		 * actual disable. Requires:
+		 *   - the queue entry to currently be 'approved' (not pending,
+		 *     not already disabled, and NOT rejected — rejection is a
+		 *     dead end, this check alone blocks that case entirely);
+		 *   - the acting Super Admin to be someone OTHER than whoever
+		 *     approved it, enforced here server-side (not just hidden in
+		 *     the UI), so a single account can't both approve and disable.
+		 * ------------------------------------------------------------
+		 */
 		if ($mode === 'disable_approved') {
 			$queue_index = $this->getInput('queue_index', null);
+
+			if ($queue_index === null) {
+				$this->respondJson(false, _('Missing approval queue reference.'));
+			}
+
 			$queue = self::loadQueue();
 
 			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'approved') {
