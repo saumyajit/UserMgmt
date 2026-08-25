@@ -156,7 +156,7 @@ button.umg-btn.umg-btn-header {
     color: #fff;
     border: 1.5px solid rgba(255,255,255,0.55);
     border-radius: 20px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     height: auto;
     white-space: nowrap;
@@ -301,7 +301,7 @@ body, .wrapper {
 
 .umg-card-title {
     color: #6b7280;
-    font-size: 11.5px;
+    font-size: 18px;
     text-transform: uppercase;
     letter-spacing: .04em;
     font-weight: 700;
@@ -321,12 +321,12 @@ body, .wrapper {
     border: 1px solid #e7e9f2;
     border-radius: 16px;
     padding: 18px 20px 20px 20px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     box-shadow: 0 2px 10px rgba(31,41,55,0.05);
 }
 
 .umg-panel h2 {
-    font-size: 15px;
+    font-size: 20px;
     font-weight: 700;
     margin: 0 0 14px 0;
     color: var(--umg-ink);
@@ -426,7 +426,7 @@ body, .wrapper {
 }
 
 .umg-filter label {
-    font-size: 11px;
+    font-size: 14px;
     color: #5f6b78;
     font-weight: 700;
 }
@@ -794,7 +794,7 @@ button.umg-btn:disabled {
 button.umg-btn-danger {
     background: #fff;
     border-color: var(--umg-red-dark);
-    color: #374151;
+    color: #f4000b;
     box-shadow: 0 4px 12px rgba(209,58,73,0.30);
 }
 
@@ -822,11 +822,12 @@ button.umg-btn-ghost {
 button.umg-btn-sm {
     height: 27px;
     padding: 0 11px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .umg-btn-icon {
-    margin-right: 4px;
+    margin-right: -2px;
+    margin-right: -5px;
 }
 
 .umg-empty-state {
@@ -1324,7 +1325,7 @@ button.umg-btn-sm {
 		<?php endif; ?>
 	</div>
 	<div class="umg-footer" style="margin-top:12px;">
-		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;margin-bottom:0;font-weight:600;color:#6b7280;"></div>
+		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;margin-bottom:0;font-weight:600;font-size:12px;color:#6b7280;"></div>
 	</div>
 </div>
 
