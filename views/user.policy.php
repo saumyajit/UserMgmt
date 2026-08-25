@@ -51,7 +51,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-settings-btn">
-			<span class="umg-btn-icon">&#9881;</span> <?= _('Settings') ?>
+			⚙️ <?= _('Settings') ?>
 		</button>
 	</div>
 </div>
