@@ -112,7 +112,7 @@ $pending_count = count($pending_queue);
 }
 
 .umg-hdr-title-main {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 700;
     letter-spacing: .3px;
     white-space: nowrap;
@@ -199,7 +199,7 @@ body, .wrapper {
     background: #fff;
     border: 1px solid #e7e9f2;
     border-radius: 24px;
-    padding: 18px 18px 16px 18px;
+    padding: 12px 4px 4px 10px;
     box-shadow: 0 2px 8px rgba(31,41,55,0.06);
     transition: box-shadow .18s ease, transform .18s ease;
 }
@@ -319,7 +319,7 @@ body, .wrapper {
     background: #fff;
     border: 1px solid #e7e9f2;
     border-radius: 16px;
-    padding: 18px 20px 20px 20px;
+    padding: 8px 6px 6px 14px;
     margin-bottom: 15px;
     box-shadow: 0 2px 10px rgba(31,41,55,0.05);
 }
@@ -483,7 +483,7 @@ body, .wrapper {
 }
 
 .umg-table td {
-    padding: 10px 10px;
+    padding: 4px 10px;
     border-bottom: 1px solid #eef0f2;
     font-size: 13px;
     vertical-align: middle;
@@ -1324,7 +1324,7 @@ button.umg-btn-sm {
 		<?php endif; ?>
 	</div>
 	<div class="umg-footer" style="margin-top:12px;">
-		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;margin-bottom:0;font-weight:600;font-size:12px;color:#6b7280;"></div>
+		<div class="umg-card-title" id="umg-footer-info" style="text-transform:none;margin-bottom:0;font-weight:600;font-size:11px;color:#6b7280;"></div>
 	</div>
 </div>
 
