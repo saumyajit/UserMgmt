@@ -5,8 +5,10 @@
 $config = $data['config'];
 $summary = $data['summary'];
 $pending_queue = $data['pending_queue'];
+$approved_queue = $data['approved_queue'];
 $activity_log = $data['activity_log'];
 $superadmins = $data['superadmins'];
+$current_actor = $data['current_actor'];
 
 function umg_esc($v) {
 	return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
@@ -14,14 +16,15 @@ function umg_esc($v) {
 
 $action_labels = [
 	'flag' => _('Flagged for approval'),
+	// NEW: approve no longer disables in the same step, label updated to match.
+	'approve' => _('Approved'),
 	'disable' => _('Disabled'),
-	'approve' => _('Approved & disabled'),
 	'reject' => _('Rejected')
 ];
 $action_classes = [
 	'flag' => 'umg-badge-warning',
+	'approve' => 'umg-badge-info',
 	'disable' => 'umg-badge-danger',
-	'approve' => 'umg-badge-danger',
 	'reject' => 'umg-badge-info'
 ];
 
@@ -32,6 +35,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 // "Details" button that opens the full text in a secondary popup.
 define('UMG_LOG_COMMENT_TRUNCATE', 60);
 $pending_count = count($pending_queue);
+$approved_count = count($approved_queue);
 ?>
 
 <!-- NEW structure, matching the Maintenance Calendar reference exactly:
@@ -258,6 +262,14 @@ body, .wrapper {
     background: radial-gradient(circle, rgba(138,95,214,0.14), transparent 70%);
 }
 
+.umg-card.umg-accent-teal::before {
+    background: linear-gradient(90deg, var(--umg-teal), #7fd8e8);
+}
+
+.umg-card.umg-accent-teal::after {
+    background: radial-gradient(circle, rgba(23,162,184,0.14), transparent 70%);
+}
+
 .umg-card-header {
     display: flex;
     align-items: center;
@@ -296,6 +308,11 @@ body, .wrapper {
 .umg-card.umg-accent-purple .umg-card-icon {
     background: linear-gradient(135deg, rgba(138,95,214,0.18), rgba(195,166,239,0.18));
     color: var(--umg-purple);
+}
+
+.umg-card.umg-accent-teal .umg-card-icon {
+    background: linear-gradient(135deg, rgba(23,162,184,0.18), rgba(127,216,232,0.18));
+    color: var(--umg-teal);
 }
 
 .umg-card-title {
@@ -346,7 +363,7 @@ body, .wrapper {
     color: var(--umg-indigo);
 }
 
-/* Pending Approvals list (rendered inside the Approval Requests modal) */
+/* Approval / disable-request lists (rendered inside the Approval Requests modal) */
 .umg-approval-item {
     display: flex;
     justify-content: space-between;
@@ -359,6 +376,22 @@ body, .wrapper {
 
 .umg-approval-item:last-child {
     border-bottom: none;
+}
+
+.umg-approval-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin: 18px 0 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.umg-approval-section-title:first-child {
+    margin-top: 0;
 }
 
 .umg-approval-meta {
@@ -624,8 +657,9 @@ body, .wrapper {
     flex-wrap: wrap;
 }
 
-/* Modals (Disable/Flag, Approve, Reject, Approval Requests, Audit Log,
-   Change Details, Settings) share one backdrop + header style */
+/* Modals (Request Approval, Approve, Reject, Disable Approved, Approval
+   Requests, Audit Log, Change Details, Settings) share one backdrop +
+   header style */
 .umg-modal-backdrop {
     display: none;
     position: fixed;
@@ -812,6 +846,18 @@ button.umg-btn-primary {
 button.umg-btn-primary:hover {
     filter: brightness(1.06);
     box-shadow: 0 6px 16px rgba(79,95,237,0.40);
+}
+
+button.umg-btn-teal {
+    background: linear-gradient(135deg, var(--umg-teal), #1587a0);
+    border-color: #1587a0;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(23,162,184,0.30);
+}
+
+button.umg-btn-teal:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 6px 16px rgba(23,162,184,0.40);
 }
 
 button.umg-btn-ghost {
@@ -1156,6 +1202,13 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-card-value"><?= umg_esc($pending_count) ?></div>
 	</div>
+	<div class="umg-card umg-accent-teal" id="umg-approved-card" style="cursor:pointer;" title="<?= _('View requests approved and awaiting disable') ?>">
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9989;</span>
+			<span class="umg-card-title"><?= _('Ready to Disable') ?></span>
+		</div>
+		<div class="umg-card-value"><?= umg_esc($approved_count) ?></div>
+	</div>
 </div>
 
 <div class="umg-panel">
@@ -1195,8 +1248,11 @@ button.umg-btn-sm {
 			<span class="umg-match-count" id="umg-match-count"></span>
 		</div>
 		<div class="umg-toolbar">
+			<!-- NEW: "Disable Selected Users" (immediate, one-click bypass) button
+			     removed entirely. Requesting approval is the only bulk action now —
+			     disabling always requires a second, different Super Admin via the
+			     Approval Requests modal. -->
 			<button type="button" class="umg-btn" id="umg-flag-selected">&#9873; <?= _('Request for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable Users') ?></button>
 		</div>
 	</div>
 
@@ -1246,7 +1302,14 @@ button.umg-btn-sm {
 						$activity_label = _('New Account');
 					}
 
-					if ($user['pending_approval']) {
+					// NEW: "approved, awaiting disable" now takes priority over the
+					// plain "Pending Approval" badge — it's a distinct, later stage
+					// of the same workflow.
+					if ($user['approved_awaiting_disable']) {
+						$rec_class = 'umg-badge-info';
+						$rec_label = _('Ready to Disable');
+					}
+					elseif ($user['pending_approval']) {
 						$rec_class = 'umg-badge-warning';
 						$rec_label = _('Pending Approval');
 					}
@@ -1263,7 +1326,17 @@ button.umg-btn-sm {
 						$rec_label = _('No Action');
 					}
 
-					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'];
+					// can_act: eligible to raise a NEW approval request.
+					$can_act = $user['recommendation'] === 'disable'
+						&& !$user['pending_approval']
+						&& !$user['approved_awaiting_disable'];
+
+					// can_disable: approved and awaiting the second, different
+					// Super Admin to actually disable. is_own_approval is a
+					// client-side UX hint only — the real enforcement happens
+					// server-side in UserPolicyExecute.php regardless.
+					$can_disable = $user['approved_awaiting_disable'];
+					$is_own_approval = $can_disable && $user['approved_by'] === $current_actor;
 
 					// Comment/audit fields are still computed (needed for the CSV export)
 					// even though the visible "Comment" column has been removed below.
@@ -1302,8 +1375,15 @@ button.umg-btn-sm {
 						<td><span class="umg-badge <?= $activity_class ?>"><?= umg_esc($activity_label) ?></span></td>
 						<td><span class="umg-badge <?= $rec_class ?>"><?= umg_esc($rec_label) ?></span></td>
 						<td>
-							<?php if ($can_act): ?>
-							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-disable-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Disable') ?></button>
+							<?php if ($can_disable): ?>
+							<button type="button" class="umg-btn umg-btn-teal umg-btn-sm umg-disable-approved-btn"
+								data-index="<?= umg_esc($user['approved_queue_index']) ?>" data-username="<?= umg_esc($user['username']) ?>"
+								<?= $is_own_approval ? 'disabled' : '' ?>
+								title="<?= $is_own_approval ? _('You approved this request — a different Super Admin must disable it.') : '' ?>">
+								<?= _('Disable') ?>
+							</button>
+							<?php elseif ($can_act): ?>
+							<button type="button" class="umg-btn umg-btn-sm umg-row-request-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Request Approval') ?></button>
 							<?php else: ?>
 							—
 							<?php endif; ?>
@@ -1321,37 +1401,38 @@ button.umg-btn-sm {
 	</div>
 </div>
 
-<!-- Disable / Flag modal — also reused by the toolbar "Request for Approval" button. -->
+<!-- Request Approval modal — the ONLY way to raise a disable request now.
+     No "Disable Now" bypass exists anywhere in the UI or the backend. -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
 	<div class="umg-modal">
 		<div class="umg-modal-header">
-			<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
+			<h3>&#9873; <?= _('Request Approval') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-modal-close-x">&times;</button>
 		</div>
 		<div class="umg-card-title" id="umg-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
-		<label><?= _('Request No. / Comment (required to disable immediately, optional to flag)') ?></label>
+		<label><?= _('Request No. / Comment (optional)') ?></label>
 		<textarea rows="3" id="umg-modal-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-modal-cancel"><?= _('Cancel') ?></button>
-			<button type="button" class="umg-btn" id="umg-modal-flag"><?= _('Flag for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-modal-confirm"><?= _('Disable Now') ?></button>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-modal-flag"><?= _('Submit Request') ?></button>
 		</div>
 	</div>
 </div>
 
-<!-- Approve modal -->
+<!-- Approve modal — approving no longer disables the user. It only moves the
+     request to "approved", after which a DIFFERENT Super Admin must disable it. -->
 <div class="umg-modal-backdrop" id="umg-approve-modal-backdrop">
 	<div class="umg-modal">
 		<div class="umg-modal-header">
-			<h3>&#9989; <?= _('Approve & Disable') ?></h3>
+			<h3>&#9989; <?= _('Approve Request') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-approve-close-x">&times;</button>
 		</div>
 		<div class="umg-card-title" id="umg-approve-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
-		<label><?= _('Approval Comment (optional, added to the requester\'s comment)') ?></label>
+		<label><?= _('Approval Comment (optional)') ?></label>
 		<textarea rows="3" id="umg-approve-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-approve-cancel"><?= _('Cancel') ?></button>
-			<button type="button" class="umg-btn umg-btn-primary" id="umg-approve-confirm"><?= _('Approve & Disable') ?></button>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-approve-confirm"><?= _('Approve') ?></button>
 		</div>
 	</div>
 </div>
@@ -1372,14 +1453,37 @@ button.umg-btn-sm {
 	</div>
 </div>
 
-<!-- Approval Requests modal — opened via the header button or the summary card. -->
+<!-- NEW: Disable (Approved) modal — the second-person step. Opened from either
+     the summary card / header button's "Ready to Disable" section, or a row's
+     "Disable" button. Server independently verifies the actor differs from
+     whoever approved it, regardless of what this modal shows. -->
+<div class="umg-modal-backdrop" id="umg-disable-approved-modal-backdrop">
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#128683; <?= _('Disable User') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-disable-approved-close-x">&times;</button>
+		</div>
+		<div class="umg-card-title" id="umg-disable-approved-userlist" style="text-transform:none;margin-bottom:12px;"></div>
+		<label><?= _('Comment (optional — falls back to the original request/approval comment)') ?></label>
+		<textarea rows="3" id="umg-disable-approved-comment"></textarea>
+		<div class="umg-modal-actions">
+			<button type="button" class="umg-btn" id="umg-disable-approved-cancel"><?= _('Cancel') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-approved-confirm"><?= _('Disable Now') ?></button>
+		</div>
+	</div>
+</div>
+
+<!-- Approval Requests modal — opened via the header button or either summary
+     card. Now shows two sections: Pending (awaiting approve/reject) and
+     Ready to Disable (approved, awaiting a different Super Admin's disable). -->
 <div class="umg-modal-backdrop" id="umg-pending-modal-backdrop">
 	<div class="umg-modal umg-modal-xwide">
 		<div class="umg-modal-header">
-			<h3>&#9203; <?= _('Pending for Approval') ?></h3>
+			<h3>&#9203; <?= _('Approval Requests') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-pending-modal-close">&times;</button>
 		</div>
 
+		<div class="umg-approval-section-title">&#9203; <?= _('Pending') ?> <span class="umg-count-pill"><?= count($pending_queue) ?></span></div>
 		<?php if ($pending_queue): ?>
 		<?php foreach ($pending_queue as $entry): ?>
 		<div class="umg-approval-item">
@@ -1404,13 +1508,46 @@ button.umg-btn-sm {
 				</button>
 				<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn"
 					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
-					<?= _('Approve & Disable') ?>
+					<?= _('Approve') ?>
 				</button>
 			</div>
 		</div>
 		<?php endforeach; ?>
 		<?php else: ?>
-		<div class="umg-empty-state"><span class="umg-empty-icon">&#9203;</span><?= _('No pending approvals right now.') ?></div>
+		<div class="umg-empty-state"><span class="umg-empty-icon">&#9203;</span><?= _('No pending requests right now.') ?></div>
+		<?php endif; ?>
+
+		<div class="umg-approval-section-title">&#9989; <?= _('Ready to Disable') ?> <span class="umg-count-pill"><?= count($approved_queue) ?></span></div>
+		<?php if ($approved_queue): ?>
+		<?php foreach ($approved_queue as $entry): ?>
+			<?php $entry_is_own_approval = ($entry['approved_by'] ?? '') === $current_actor; ?>
+		<div class="umg-approval-item">
+			<div class="umg-approval-meta">
+				<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
+				<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
+				<span class="umg-approval-dot">&middot;</span>
+				<span class="umg-approval-flagged-inline">
+					<?= _('Approved by') ?> <strong><?= umg_esc($entry['approved_by'] ?? '-') ?></strong>
+					<?php if (!empty($entry['approved_at'])): ?>
+						&middot; <?= umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['approved_at'])) ?>
+					<?php endif; ?>
+				</span>
+				<?php if (!empty($entry['comment'])): ?>
+				<span class="umg-approval-comment-inline" title="<?= umg_esc($entry['comment']) ?>">&#128172; <?= umg_esc($entry['comment']) ?></span>
+				<?php endif; ?>
+			</div>
+			<div class="umg-approval-actions">
+				<button type="button" class="umg-btn umg-btn-sm umg-btn-danger umg-disable-approved-btn"
+					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>"
+					<?= $entry_is_own_approval ? 'disabled' : '' ?>
+					title="<?= $entry_is_own_approval ? _('You approved this request — a different Super Admin must disable it.') : '' ?>">
+					<?= _('Disable') ?>
+				</button>
+			</div>
+		</div>
+		<?php endforeach; ?>
+		<?php else: ?>
+		<div class="umg-empty-state"><span class="umg-empty-icon">&#9989;</span><?= _('Nothing awaiting disable right now.') ?></div>
 		<?php endif; ?>
 	</div>
 </div>
@@ -1631,42 +1768,6 @@ button.umg-btn-sm {
 		}
 	});
 
-	// Disable / Flag modal (shared by row-level Disable button AND the toolbar
-	// "Request for Approval" button, so a comment can always be added).
-	var modalBackdrop = document.getElementById('umg-modal-backdrop');
-	var modalUserlist = document.getElementById('umg-modal-userlist');
-	var modalComment = document.getElementById('umg-modal-comment');
-	var pendingUserIds = [];
-
-	function openModal(userIds) {
-		pendingUserIds = userIds;
-		modalUserlist.textContent = userIds.length + ' ' + '<?= _('users selected') ?>';
-		modalComment.value = '';
-		openBackdrop(modalBackdrop);
-	}
-	function closeModal() {
-		closeBackdrop(modalBackdrop);
-		pendingUserIds = [];
-	}
-	document.getElementById('umg-modal-cancel').addEventListener('click', closeModal);
-	document.getElementById('umg-modal-close-x').addEventListener('click', closeModal);
-
-	document.getElementById('umg-disable-selected').addEventListener('click', function() {
-		var ids = getSelectedUserIds();
-		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
-		openModal(ids);
-	});
-	document.getElementById('umg-flag-selected').addEventListener('click', function() {
-		var ids = getSelectedUserIds();
-		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
-		openModal(ids);
-	});
-	table.addEventListener('click', function(e) {
-		if (e.target.classList.contains('umg-row-disable-btn')) {
-			openModal([e.target.getAttribute('data-userid')]);
-		}
-	});
-
 	function submitAction(params) {
 		var body = new URLSearchParams();
 		(params.userids || []).forEach(function(id) { body.append('userids[]', id); });
@@ -1687,16 +1788,46 @@ button.umg-btn-sm {
 			.catch(function() { alert('<?= _('Request failed.') ?>'); });
 	}
 
-	document.getElementById('umg-modal-confirm').addEventListener('click', function() {
-		submitAction({ userids: pendingUserIds, mode: 'immediate', comment: modalComment.value.trim() });
-		closeModal();
+	// Request Approval modal (shared by the row-level "Request Approval" button
+	// AND the toolbar's bulk "Request for Approval" button). This is now the
+	// ONLY way to start a disable request — there is no "disable now" option
+	// anywhere, in this modal or elsewhere.
+	var modalBackdrop = document.getElementById('umg-modal-backdrop');
+	var modalUserlist = document.getElementById('umg-modal-userlist');
+	var modalComment = document.getElementById('umg-modal-comment');
+	var pendingUserIds = [];
+
+	function openModal(userIds) {
+		pendingUserIds = userIds;
+		modalUserlist.textContent = userIds.length + ' ' + '<?= _('users selected') ?>';
+		modalComment.value = '';
+		openBackdrop(modalBackdrop);
+	}
+	function closeModal() {
+		closeBackdrop(modalBackdrop);
+		pendingUserIds = [];
+	}
+	document.getElementById('umg-modal-cancel').addEventListener('click', closeModal);
+	document.getElementById('umg-modal-close-x').addEventListener('click', closeModal);
+
+	document.getElementById('umg-flag-selected').addEventListener('click', function() {
+		var ids = getSelectedUserIds();
+		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
+		openModal(ids);
 	});
+	table.addEventListener('click', function(e) {
+		if (e.target.classList.contains('umg-row-request-btn')) {
+			openModal([e.target.getAttribute('data-userid')]);
+		}
+	});
+
 	document.getElementById('umg-modal-flag').addEventListener('click', function() {
 		submitAction({ userids: pendingUserIds, mode: 'flag', comment: modalComment.value.trim() });
 		closeModal();
 	});
 
-	// Approve modal
+	// Approve modal — approving only changes status to 'approved'; it never
+	// disables the user in this same step.
 	var approveBackdrop = document.getElementById('umg-approve-modal-backdrop');
 	var approveUserlist = document.getElementById('umg-approve-modal-userlist');
 	var approveComment = document.getElementById('umg-approve-comment');
@@ -1736,7 +1867,33 @@ button.umg-btn-sm {
 		closeBackdrop(rejectBackdrop);
 	});
 
-	// Approval Requests modal wiring — opened from the header button OR the summary card.
+	// NEW: Disable (Approved) modal — the second-person step. Bound to every
+	// ".umg-disable-approved-btn" on the page: the row-level buttons in the
+	// main table AND the ones inside the "Ready to Disable" section of the
+	// Approval Requests modal. Buttons the server would reject anyway (same
+	// person who approved) are rendered "disabled" and ignored here too.
+	var disableApprovedBackdrop = document.getElementById('umg-disable-approved-modal-backdrop');
+	var disableApprovedUserlist = document.getElementById('umg-disable-approved-userlist');
+	var disableApprovedComment = document.getElementById('umg-disable-approved-comment');
+	var disableApprovedIndex = null;
+
+	document.querySelectorAll('.umg-disable-approved-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			if (btn.disabled) return;
+			disableApprovedIndex = btn.getAttribute('data-index');
+			disableApprovedUserlist.textContent = btn.getAttribute('data-username');
+			disableApprovedComment.value = '';
+			openBackdrop(disableApprovedBackdrop);
+		});
+	});
+	document.getElementById('umg-disable-approved-cancel').addEventListener('click', function() { closeBackdrop(disableApprovedBackdrop); });
+	document.getElementById('umg-disable-approved-close-x').addEventListener('click', function() { closeBackdrop(disableApprovedBackdrop); });
+	document.getElementById('umg-disable-approved-confirm').addEventListener('click', function() {
+		submitAction({ mode: 'disable_approved', queue_index: disableApprovedIndex, comment: disableApprovedComment.value.trim() });
+		closeBackdrop(disableApprovedBackdrop);
+	});
+
+	// Approval Requests modal wiring — opened from the header button OR either summary card.
 	var pendingBackdrop = document.getElementById('umg-pending-modal-backdrop');
 	document.getElementById('umg-pending-btn').addEventListener('click', function() {
 		openBackdrop(pendingBackdrop);
@@ -1747,6 +1904,10 @@ button.umg-btn-sm {
 	var pendingCard = document.getElementById('umg-pending-card');
 	if (pendingCard) {
 		pendingCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
+	}
+	var approvedCard = document.getElementById('umg-approved-card');
+	if (approvedCard) {
+		approvedCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
 	}
 
 	// Audit Log modal wiring + client-side search/action/date filtering
@@ -1940,9 +2101,6 @@ button.umg-btn-sm {
 	});
 
 	// CSV export of currently-visible rows, including the resolved activity comment.
-	// NEW: comment is now pulled from the row's own "data-csv-comment" attribute
-	// (set on <tr>) instead of a removed comment <td> — the visible column is
-	// gone, but the exported data is unchanged.
 	function csvSafe(text) {
 		text = String(text == null ? '' : text).trim();
 		if (text === '' || text === '\u2014' || text === '\u2013' || text === '-') {
