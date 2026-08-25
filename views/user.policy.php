@@ -43,7 +43,7 @@ $pending_count = count($pending_queue);
 <div class="umg-page-header">
 	<div class="umg-hdr-title-center">
 		<div class="umg-hdr-title-main">
-			<span class="umg-page-header-icon">&#128101;</span> <?= umg_esc($data['title']) ?>
+			<span class="umg-page-header-icon">👥</span> <?= umg_esc($data['title']) ?>
 		</div>
 		<div class="umg-hdr-title-sub">
 			<?= _('Reviews Zabbix user accounts against a configurable inactivity policy, lets Super Admins flag or disable stale/never-logged-in users, and routes disable requests through an approval workflow with a full audit trail.') ?>
@@ -122,17 +122,16 @@ $pending_count = count($pending_queue);
 }
 
 .umg-page-header-icon {
-    font-size: 20px;
-    vertical-align: -2px;
+    font-size: 28px;
+    vertical-align: 2px;
 }
 
 .umg-hdr-title-sub {
-    font-size: 12px;
+    font-size: 13px;
     opacity: .85;
     font-weight: 500;
     letter-spacing: .2px;
     padding-top: 10px;
-    line-height: 1.5;
 }
 
 .umg-hdr-right {
@@ -192,7 +191,7 @@ body, .wrapper {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 16px;
-    margin: 16px 0 22px 0;
+    margin: -6px 0 16px 0;
 }
 
 .umg-card {
@@ -200,7 +199,7 @@ body, .wrapper {
     overflow: hidden;
     background: #fff;
     border: 1px solid #e7e9f2;
-    border-radius: 10px;
+    border-radius: 24px;
     padding: 18px 18px 16px 18px;
     box-shadow: 0 2px 8px rgba(31,41,55,0.06);
     transition: box-shadow .18s ease, transform .18s ease;
@@ -264,7 +263,7 @@ body, .wrapper {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 .umg-card-icon {
@@ -313,13 +312,14 @@ body, .wrapper {
     font-weight: 800;
     color: var(--umg-ink);
     line-height: 1;
+    text-align: center;
 }
 
 /* Generic panel */
 .umg-panel {
     background: #fff;
     border: 1px solid #e7e9f2;
-    border-radius: 10px;
+    border-radius: 16px;
     padding: 18px 20px 20px 20px;
     margin-bottom: 20px;
     box-shadow: 0 2px 10px rgba(31,41,55,0.05);
@@ -438,6 +438,7 @@ body, .wrapper {
     padding: 0 10px;
     min-width: 170px;
     font-size: 13px;
+    font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Tahoma, sans-serif;
     background: #fbfcfe;
     transition: border-color .12s ease, box-shadow .12s ease;
 }
@@ -770,6 +771,7 @@ button.umg-btn {
     cursor: pointer;
     font-size: 13px;
     font-weight: 700;
+    font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Tahoma, sans-serif;
     color: #374151;
     transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease, transform .1s ease;
 }
