@@ -431,9 +431,9 @@ body, .wrapper {
 }
 
 .umg-filter select, .umg-filter input {
-    height: 34px;
+    height: 30px;
     border: 1.5px solid #dde1ea;
-    border-radius: 6px;
+    border-radius: 20px;
     padding: 0 10px;
     min-width: 170px;
     font-size: 13px;
