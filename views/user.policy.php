@@ -90,7 +90,7 @@ $pending_count = count($pending_queue);
     position: relative;
     display: flex;
     align-items: center;
-    min-height: 100px;
+    min-height: 80px;
     background: linear-gradient(135deg, #1a3a5c 0%, #1e5799 55%, #2e86c1 100%);
     border-radius: 20px;
     padding: 0 20px;
@@ -118,7 +118,6 @@ $pending_count = count($pending_queue);
     white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     padding-bottom: 4px;
-    padding-top: 4px;
 }
 
 .umg-page-header-icon {
@@ -127,7 +126,7 @@ $pending_count = count($pending_queue);
 }
 
 .umg-hdr-title-sub {
-    font-size: 13px;
+    font-size: 16px;
     opacity: .85;
     font-weight: 500;
     letter-spacing: .2px;
