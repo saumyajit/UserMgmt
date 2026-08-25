@@ -70,8 +70,12 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		--umg-ink: #1f2937;
 	}
 
+	/* NEW: align-items: center (was flex-start) so the header buttons stay
+	   vertically centered against the whole left block — title + description
+	   together — no matter how tall that block grows if font sizes/description
+	   text change later. */
 	.umg-page-header {
-		display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;
+		display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
 		background: linear-gradient(120deg, var(--umg-indigo) 0%, var(--umg-purple) 55%, var(--umg-blue) 100%);
 		border-radius: 10px; padding: 18px 22px; margin-bottom: 20px;
 		box-shadow: 0 8px 22px rgba(79,95,237,0.25);
@@ -80,8 +84,8 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-page-header-icon { font-size: 26px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); margin-top: 2px; }
 	.umg-page-header h1 { color: #fff; margin: 0; font-weight: 700; letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 	.umg-page-header-desc { color: rgba(255,255,255,0.88); font-size: 12.5px; margin-top: 5px; max-width: 620px; line-height: 1.5; }
-	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); }
+	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; align-self: center; margin-left: auto; }
+	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); white-space: nowrap; }
 	.umg-btn-header:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
 
 	body, .wrapper { background: linear-gradient(180deg, #f3f5fb 0%, #eef1fa 100%); }
@@ -132,7 +136,22 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 10px; margin-left: 4px; vertical-align: middle;
 		box-shadow: 0 2px 6px rgba(79,95,237,0.35);
 	}
-	.umg-panel.umg-panel-approvals { border-top: 4px solid var(--umg-amber); background: linear-gradient(180deg, #fffdf6 0%, #ffffff 55%); }
+
+	/* NEW: compact Pending Approvals panel — everything about one entry now
+	   fits on a single line instead of stacking username/comment/flagged-by
+	   across 3 rows. */
+	.umg-panel.umg-panel-approvals { border-top: 4px solid var(--umg-amber); background: linear-gradient(180deg, #fffdf6 0%, #ffffff 55%); padding-bottom: 8px; }
+	.umg-panel.umg-panel-approvals h2 { margin-bottom: 8px; }
+	.umg-approval-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px dashed #ecd9a8; flex-wrap: wrap; }
+	.umg-approval-item:last-child { border-bottom: none; }
+	.umg-approval-meta { flex: 1; min-width: 220px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12.5px; line-height: 1.5; }
+	.umg-approval-meta .umg-username { font-size: 13px; }
+	.umg-approval-meta .umg-subtext-inline { font-size: 11px; color: #8a94a3; }
+	.umg-approval-dot { color: #d8c48a; }
+	.umg-approval-flagged-inline { font-size: 11.5px; color: #8a94a3; }
+	.umg-approval-comment-inline { font-size: 11.5px; color: #7a6420; background: #fdf6e3; border: 1px solid #f2e2ae; border-radius: 10px; padding: 1px 9px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.umg-approval-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
 	.umg-filter-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 	.umg-filter { display: flex; flex-direction: column; gap: 5px; }
 	.umg-filter label { font-size: 11px; color: #5f6b78; font-weight: 700; }
@@ -155,7 +174,11 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-table tbody tr.umg-row-checked { background: #dcebff; box-shadow: inset 3px 0 0 var(--umg-blue); }
 	.umg-username { font-weight: 700; color: var(--umg-ink); }
 	.umg-subtext { display: block; font-size: 11px; color: #7b8490; margin-top: 1px; }
-	.umg-comment-text { font-size: 12px; color: #4b5563; max-width: 220px; white-space: normal; }
+	.umg-comment-text { font-size: 12px; color: #4b5563; max-width: 240px; white-space: normal; }
+	.umg-comment-tag {
+		display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+		color: #6b7280; background: #eef1f4; border-radius: 4px; padding: 1px 5px; margin-right: 5px; vertical-align: middle;
+	}
 	.umg-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 	.umg-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 	.umg-badge-danger { background: linear-gradient(90deg, #fde3e3, #fdeceb); color: #b42323; }
@@ -215,15 +238,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-empty-state { text-align: center; padding: 34px 10px; color: #8a94a3; font-size: 13px; }
 	.umg-empty-state .umg-empty-icon { font-size: 30px; display: block; margin-bottom: 8px; opacity: .55; }
 
-	.umg-approval-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 13px 4px; border-bottom: 1px dashed #ecd9a8; flex-wrap: wrap; }
-	.umg-approval-item:last-child { border-bottom: none; }
-	.umg-approval-meta { flex: 1; min-width: 220px; }
-	.umg-approval-meta .umg-username { font-size: 14px; }
-	.umg-approval-comment { font-size: 12px; color: #4b5563; margin-top: 4px; background: #fdf6e3; border: 1px solid #f2e2ae; border-radius: 6px; padding: 6px 10px; }
-	.umg-approval-flagged { font-size: 11px; color: #8a94a3; margin-top: 4px; }
-	.umg-approval-actions { display: flex; gap: 8px; align-items: center; }
-
-	/* ---- Audit Log: header bar + filter row + structured table ---- */
+	/* Audit Log: header bar + filter row + structured table */
 	.umg-audit-header {
 		display: flex; justify-content: space-between; align-items: center; gap: 10px;
 		background: linear-gradient(120deg, #1c3d63 0%, var(--umg-blue) 100%); margin: -22px -22px 16px -22px;
@@ -251,15 +266,6 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-audit-target { color: #374151; }
 	.umg-audit-comment { color: #4b5563; max-width: 260px; }
 	.umg-audit-empty-row td { text-align: center; color: #8a94a3; padding: 24px; }
-
-	.umg-log-wrap { max-height: 260px; overflow-y: auto; border: 1px solid #eef0f2; border-radius: 8px; }
-	.umg-log-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #eef0f2; position: relative; }
-	.umg-log-item:hover { background: #f8fafd; }
-	.umg-log-item:last-child { border-bottom: none; }
-	.umg-log-meta { flex: 1; min-width: 0; }
-	.umg-log-comment { font-size: 12px; color: #4b5563; margin-top: 3px; background: #f6f7fb; border-radius: 5px; padding: 5px 8px; }
-	.umg-log-actor { font-size: 11px; color: #8a94a3; margin-top: 3px; }
-	.umg-log-time { font-size: 11px; color: #8a94a3; white-space: nowrap; padding-top: 2px; }
 
 	/* Chip-based "search & select" multiselect (Approvers picker) */
 	.umg-ms { position: relative; }
@@ -328,16 +334,18 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	<?php foreach ($pending_queue as $entry): ?>
 	<div class="umg-approval-item">
 		<div class="umg-approval-meta">
-			<div class="umg-username"><?= umg_esc($entry['username']) ?> <span class="umg-subtext">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span></div>
-			<?php if (!empty($entry['comment'])): ?>
-			<div class="umg-approval-comment"><?= umg_esc($entry['comment']) ?></div>
-			<?php endif; ?>
-			<div class="umg-approval-flagged">
+			<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
+			<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
+			<span class="umg-approval-dot">&middot;</span>
+			<span class="umg-approval-flagged-inline">
 				<?= _('Flagged by') ?> <strong><?= umg_esc($entry['flagged_by']) ?></strong>
 				<?php if (!empty($entry['flagged_at'])): ?>
 					&middot; <?= umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['flagged_at'])) ?>
 				<?php endif; ?>
-			</div>
+			</span>
+			<?php if (!empty($entry['comment'])): ?>
+			<span class="umg-approval-comment-inline" title="<?= umg_esc($entry['comment']) ?>">&#128172; <?= umg_esc($entry['comment']) ?></span>
+			<?php endif; ?>
 		</div>
 		<div class="umg-approval-actions">
 			<button type="button" class="umg-btn umg-btn-sm umg-btn-ghost umg-reject-btn"
@@ -462,9 +470,25 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 
 					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'];
 
-					$comment_text = $user['disable_comment'] ?? $user['pending_comment'] ?? '';
+					// NEW: while a request is pending, show the flag comment; otherwise
+					// show whatever the most recent recorded activity comment was (flag,
+					// disable, approve or reject) — tagged with which action it came
+					// from, so the column (and the CSV) is populated far more often
+					// instead of showing "-" for almost every row.
+					if ($user['pending_approval']) {
+						$comment_text = trim((string) ($user['pending_comment'] ?? ''));
+						$comment_tag = $action_labels['flag'];
+					}
+					else {
+						$comment_text = trim((string) ($user['disable_comment'] ?? ''));
+						$comment_tag = $action_labels[$user['last_action'] ?? ''] ?? '';
+					}
+
 					$comment_csv = $comment_text;
-					if ($comment_text !== '' && !empty($user['disabled_by'])) {
+					if ($comment_text !== '' && $comment_tag !== '') {
+						$comment_csv = '[' . $comment_tag . '] ' . $comment_text;
+					}
+					if ($comment_text !== '' && !empty($user['disabled_by']) && !$user['pending_approval']) {
 						$comment_csv .= ' - ' . $user['disabled_by'];
 						if (!empty($user['disabled_at'])) {
 							$comment_csv .= ' (' . zbx_date2str(DATE_TIME_FORMAT_SECONDS, $user['disabled_at']) . ')';
@@ -484,7 +508,14 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 						<td><?= umg_esc($inactive_for) ?></td>
 						<td><span class="umg-badge <?= $activity_class ?>"><?= umg_esc($activity_label) ?></span></td>
 						<td><span class="umg-badge <?= $rec_class ?>"><?= umg_esc($rec_label) ?></span></td>
-						<td class="umg-comment-text" data-csv-comment="<?= umg_esc($comment_csv) ?>"><?= $comment_text !== '' ? umg_esc($comment_text) : '—' ?></td>
+						<td class="umg-comment-text" data-csv-comment="<?= umg_esc($comment_csv) ?>">
+							<?php if ($comment_text !== ''): ?>
+								<?php if ($comment_tag !== ''): ?><span class="umg-comment-tag"><?= umg_esc($comment_tag) ?></span><?php endif; ?>
+								<?= umg_esc($comment_text) ?>
+							<?php else: ?>
+								-
+							<?php endif; ?>
+						</td>
 						<td>
 							<?php if ($can_act): ?>
 							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-disable-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Disable') ?></button>
@@ -505,12 +536,14 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	</div>
 </div>
 
-<!-- Disable modal -->
+<!-- Disable modal — also reused by the toolbar "Flag Selected for Approval" button so
+     users always get a chance to add a comment before flagging (fixes flags being
+     silently recorded with an empty comment when triggered from the toolbar). -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
 	<div class="umg-modal" style="border-top-color: var(--umg-red-dark);">
-		<h3>&#128683; <?= _('Disable Users') ?></h3>
+		<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
 		<div class="umg-card-title" id="umg-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
-		<label><?= _('Request No. / Comment (required to disable immediately)') ?></label>
+		<label><?= _('Request No. / Comment (required to disable immediately, optional to flag)') ?></label>
 		<textarea rows="3" id="umg-modal-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-modal-cancel"><?= _('Cancel') ?></button>
@@ -633,7 +666,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		<button type="button" class="umg-modal-close-x" id="umg-log-details-close-x">&times;</button>
 		<h3>&#128203; <?= _('Change Details') ?></h3>
 		<div class="umg-card-title" id="umg-log-details-meta" style="text-transform:none;margin-bottom:10px;font-weight:600;color:#6b7280;"></div>
-		<div class="umg-approval-comment" id="umg-log-details-text" style="white-space:pre-wrap;"></div>
+		<div class="umg-approval-comment" id="umg-log-details-text" style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px 12px;font-size:13px;color:#374151;"></div>
 		<div class="umg-modal-actions" style="margin-top:16px;">
 			<button type="button" class="umg-btn" id="umg-log-details-close"><?= _('Close') ?></button>
 		</div>
@@ -757,7 +790,8 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		}
 	});
 
-	// Disable modal
+	// Disable / Flag modal (shared by row-level Disable button AND the toolbar
+	// "Flag Selected for Approval" button, so a comment can always be added).
 	var modalBackdrop = document.getElementById('umg-modal-backdrop');
 	var modalUserlist = document.getElementById('umg-modal-userlist');
 	var modalComment = document.getElementById('umg-modal-comment');
@@ -780,10 +814,13 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
 		openModal(ids);
 	});
+	// NEW: opens the same comment modal instead of flagging immediately with an
+	// empty comment — this was the reason the Comment column/CSV showed nothing
+	// for anything flagged from the toolbar.
 	document.getElementById('umg-flag-selected').addEventListener('click', function() {
 		var ids = getSelectedUserIds();
 		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
-		submitAction({ userids: ids, mode: 'flag', comment: '' });
+		openModal(ids);
 	});
 	table.addEventListener('click', function(e) {
 		if (e.target.classList.contains('umg-row-disable-btn')) {
@@ -1045,10 +1082,10 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 			.catch(function() { alert('<?= _('Request failed.') ?>'); });
 	});
 
-	// CSV export of currently-visible rows, including disablement comment.
-	// NEW: any placeholder dash ("—", "-", empty) is normalized to a plain
-	// ASCII hyphen so it survives Excel's default (non-UTF8) CSV import
-	// instead of rendering as "â€"" mojibake.
+	// CSV export of currently-visible rows, including the resolved activity comment.
+	// Any placeholder dash ("—", "-", empty) is normalized to a plain ASCII hyphen
+	// so it survives Excel's default (non-UTF8) CSV import instead of rendering as
+	// "â€"" mojibake.
 	function csvSafe(text) {
 		text = String(text == null ? '' : text).trim();
 		if (text === '' || text === '\u2014' || text === '\u2013' || text === '-') {
