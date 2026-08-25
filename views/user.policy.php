@@ -31,6 +31,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 // Threshold above which the Audit Log's Comment column truncates and shows a
 // "Details" button that opens the full text in a secondary popup.
 define('UMG_LOG_COMMENT_TRUNCATE', 60);
+$pending_count = count($pending_queue);
 ?>
 
 <div class="umg-page-header">
@@ -46,6 +47,10 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	<div class="umg-page-header-actions">
 		<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
 			<span class="umg-btn-icon">&#128337;</span> <?= _('Audit Log') ?>
+		</button>
+		<button type="button" class="umg-btn umg-btn-header" id="umg-pending-btn">
+			<span class="umg-btn-icon">&#9203;</span> <?= _('Pending Approvals') ?>
+			<?php if ($pending_count > 0): ?><span class="umg-header-badge"><?= umg_esc($pending_count) ?></span><?php endif; ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
 			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
@@ -70,10 +75,6 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		--umg-ink: #1f2937;
 	}
 
-	/* NEW: align-items: center (was flex-start) so the header buttons stay
-	   vertically centered against the whole left block — title + description
-	   together — no matter how tall that block grows if font sizes/description
-	   text change later. */
 	.umg-page-header {
 		display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
 		background: linear-gradient(120deg, var(--umg-indigo) 0%, var(--umg-purple) 55%, var(--umg-blue) 100%);
@@ -85,12 +86,17 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-page-header h1 { color: #fff; margin: 0; font-weight: 700; letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 	.umg-page-header-desc { color: rgba(255,255,255,0.88); font-size: 12.5px; margin-top: 5px; max-width: 620px; line-height: 1.5; }
 	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; align-self: center; margin-left: auto; }
-	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); white-space: nowrap; }
+	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 	.umg-btn-header:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
+	.umg-header-badge {
+		display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+		background: var(--umg-red); color: #fff; font-size: 10.5px; font-weight: 800; border-radius: 9px;
+		box-shadow: 0 0 0 2px rgba(255,255,255,0.35);
+	}
 
 	body, .wrapper { background: linear-gradient(180deg, #f3f5fb 0%, #eef1fa 100%); }
 
-	.umg-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 16px 0 22px 0; }
+	.umg-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin: 16px 0 22px 0; }
 	.umg-card {
 		position: relative; overflow: hidden; background: #fff; border: 1px solid #e7e9f2;
 		border-radius: 10px; padding: 18px 18px 16px 18px; box-shadow: 0 2px 8px rgba(31,41,55,0.06);
@@ -110,6 +116,8 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-card.umg-accent-warning::before { background: linear-gradient(90deg, var(--umg-amber), #ffd166); }
 	.umg-card.umg-accent-warning::after { background: radial-gradient(circle, rgba(224,167,33,0.14), transparent 70%); }
 	.umg-card.umg-accent-ok::before { background: linear-gradient(90deg, var(--umg-green), #7be0a8); }
+	.umg-card.umg-accent-purple::before { background: linear-gradient(90deg, var(--umg-purple), #c3a6ef); }
+	.umg-card.umg-accent-purple::after { background: radial-gradient(circle, rgba(138,95,214,0.14), transparent 70%); }
 	.umg-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 	.umg-card-icon {
 		display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;
@@ -119,8 +127,10 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-card.umg-accent-danger .umg-card-icon { background: linear-gradient(135deg, rgba(224,82,96,0.16), rgba(255,138,128,0.16)); color: var(--umg-red-dark); }
 	.umg-card.umg-accent-warning .umg-card-icon { background: linear-gradient(135deg, rgba(224,167,33,0.18), rgba(255,209,102,0.18)); color: #8a6200; }
 	.umg-card.umg-accent-ok .umg-card-icon { background: linear-gradient(135deg, rgba(34,160,107,0.16), rgba(123,224,168,0.16)); color: var(--umg-green); }
+	.umg-card.umg-accent-purple .umg-card-icon { background: linear-gradient(135deg, rgba(138,95,214,0.18), rgba(195,166,239,0.18)); color: var(--umg-purple); }
 	.umg-card-title { color: #6b7280; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
 	.umg-card-value { font-size: 30px; font-weight: 800; color: var(--umg-ink); line-height: 1; }
+	.umg-card-link { position: absolute; inset: 0; }
 
 	.umg-panel {
 		background: #fff; border: 1px solid #e7e9f2; border-radius: 10px; padding: 18px 20px 20px 20px;
@@ -137,11 +147,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		box-shadow: 0 2px 6px rgba(79,95,237,0.35);
 	}
 
-	/* NEW: compact Pending Approvals panel — everything about one entry now
-	   fits on a single line instead of stacking username/comment/flagged-by
-	   across 3 rows. */
-	.umg-panel.umg-panel-approvals { border-top: 4px solid var(--umg-amber); background: linear-gradient(180deg, #fffdf6 0%, #ffffff 55%); padding-bottom: 8px; }
-	.umg-panel.umg-panel-approvals h2 { margin-bottom: 8px; }
+	/* Compact Pending Approvals list — reused both nowhere else but the modal now */
 	.umg-approval-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px dashed #ecd9a8; flex-wrap: wrap; }
 	.umg-approval-item:last-child { border-bottom: none; }
 	.umg-approval-meta { flex: 1; min-width: 220px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12.5px; line-height: 1.5; }
@@ -267,6 +273,15 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	.umg-audit-comment { color: #4b5563; max-width: 260px; }
 	.umg-audit-empty-row td { text-align: center; color: #8a94a3; padding: 24px; }
 
+	/* Pending Approvals modal header bar (amber, matches the card's accent) */
+	.umg-pending-header {
+		display: flex; justify-content: space-between; align-items: center; gap: 10px;
+		background: linear-gradient(120deg, #a5720f 0%, var(--umg-amber) 100%); margin: -22px -22px 16px -22px;
+		padding: 16px 22px; border-radius: 12px 12px 0 0;
+	}
+	.umg-pending-header h3 { color: #fff; margin: 0; display: flex; align-items: center; gap: 10px; font-size: 17px; }
+	.umg-pending-header .umg-count-pill { background: rgba(255,255,255,0.28); box-shadow: none; }
+
 	/* Chip-based "search & select" multiselect (Approvers picker) */
 	.umg-ms { position: relative; }
 	.umg-ms-box {
@@ -326,41 +341,15 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['recommended_disable']) ?></div>
 	</div>
-</div>
-
-<?php if ($pending_queue): ?>
-<div class="umg-panel umg-panel-approvals">
-	<h2><span class="umg-h2-icon">&#9203;</span><?= _('Pending Approvals') ?> <span class="umg-count-pill"><?= count($pending_queue) ?></span></h2>
-	<?php foreach ($pending_queue as $entry): ?>
-	<div class="umg-approval-item">
-		<div class="umg-approval-meta">
-			<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
-			<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
-			<span class="umg-approval-dot">&middot;</span>
-			<span class="umg-approval-flagged-inline">
-				<?= _('Flagged by') ?> <strong><?= umg_esc($entry['flagged_by']) ?></strong>
-				<?php if (!empty($entry['flagged_at'])): ?>
-					&middot; <?= umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['flagged_at'])) ?>
-				<?php endif; ?>
-			</span>
-			<?php if (!empty($entry['comment'])): ?>
-			<span class="umg-approval-comment-inline" title="<?= umg_esc($entry['comment']) ?>">&#128172; <?= umg_esc($entry['comment']) ?></span>
-			<?php endif; ?>
+	<!-- NEW: Pending Approvals count card, clicking it opens the same modal as the header button -->
+	<div class="umg-card umg-accent-purple" id="umg-pending-card" style="cursor:pointer;" title="<?= _('View pending approvals') ?>">
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9203;</span>
+			<span class="umg-card-title"><?= _('Pending Approvals') ?></span>
 		</div>
-		<div class="umg-approval-actions">
-			<button type="button" class="umg-btn umg-btn-sm umg-btn-ghost umg-reject-btn"
-				data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
-				<?= _('Reject') ?>
-			</button>
-			<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn"
-				data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
-				<?= _('Approve & Disable') ?>
-			</button>
-		</div>
+		<div class="umg-card-value"><?= umg_esc($pending_count) ?></div>
 	</div>
-	<?php endforeach; ?>
 </div>
-<?php endif; ?>
 
 <div class="umg-panel">
 	<h2><span class="umg-h2-icon">&#128269;</span><?= _('Filter Users') ?></h2>
@@ -470,11 +459,6 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 
 					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'];
 
-					// NEW: while a request is pending, show the flag comment; otherwise
-					// show whatever the most recent recorded activity comment was (flag,
-					// disable, approve or reject) — tagged with which action it came
-					// from, so the column (and the CSV) is populated far more often
-					// instead of showing "-" for almost every row.
 					if ($user['pending_approval']) {
 						$comment_text = trim((string) ($user['pending_comment'] ?? ''));
 						$comment_tag = $action_labels['flag'];
@@ -536,9 +520,8 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	</div>
 </div>
 
-<!-- Disable modal — also reused by the toolbar "Flag Selected for Approval" button so
-     users always get a chance to add a comment before flagging (fixes flags being
-     silently recorded with an empty comment when triggered from the toolbar). -->
+<!-- Disable / Flag modal — also reused by the toolbar "Flag Selected for Approval" button so
+     users always get a chance to add a comment before flagging. -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
 	<div class="umg-modal" style="border-top-color: var(--umg-red-dark);">
 		<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
@@ -577,6 +560,50 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 			<button type="button" class="umg-btn" id="umg-reject-cancel"><?= _('Cancel') ?></button>
 			<button type="button" class="umg-btn umg-btn-danger" id="umg-reject-confirm"><?= _('Reject') ?></button>
 		</div>
+	</div>
+</div>
+
+<!-- NEW: Pending Approvals modal — opened via the header button (with count badge)
+     or the new summary card. Closes on Esc / × like every other modal. -->
+<div class="umg-modal-backdrop" id="umg-pending-modal-backdrop">
+	<div class="umg-modal umg-modal-xwide">
+		<div class="umg-pending-header">
+			<h3>&#9203; <?= _('Pending Approvals') ?> <span class="umg-count-pill"><?= umg_esc($pending_count) ?></span></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-pending-modal-close" style="position:static;color:#fff;font-size:20px;">&times;</button>
+		</div>
+
+		<?php if ($pending_queue): ?>
+		<?php foreach ($pending_queue as $entry): ?>
+		<div class="umg-approval-item">
+			<div class="umg-approval-meta">
+				<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
+				<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
+				<span class="umg-approval-dot">&middot;</span>
+				<span class="umg-approval-flagged-inline">
+					<?= _('Flagged by') ?> <strong><?= umg_esc($entry['flagged_by']) ?></strong>
+					<?php if (!empty($entry['flagged_at'])): ?>
+						&middot; <?= umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['flagged_at'])) ?>
+					<?php endif; ?>
+				</span>
+				<?php if (!empty($entry['comment'])): ?>
+				<span class="umg-approval-comment-inline" title="<?= umg_esc($entry['comment']) ?>">&#128172; <?= umg_esc($entry['comment']) ?></span>
+				<?php endif; ?>
+			</div>
+			<div class="umg-approval-actions">
+				<button type="button" class="umg-btn umg-btn-sm umg-btn-ghost umg-reject-btn"
+					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
+					<?= _('Reject') ?>
+				</button>
+				<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn"
+					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
+					<?= _('Approve & Disable') ?>
+				</button>
+			</div>
+		</div>
+		<?php endforeach; ?>
+		<?php else: ?>
+		<div class="umg-empty-state"><span class="umg-empty-icon">&#9203;</span><?= _('No pending approvals right now.') ?></div>
+		<?php endif; ?>
 	</div>
 </div>
 
@@ -666,7 +693,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		<button type="button" class="umg-modal-close-x" id="umg-log-details-close-x">&times;</button>
 		<h3>&#128203; <?= _('Change Details') ?></h3>
 		<div class="umg-card-title" id="umg-log-details-meta" style="text-transform:none;margin-bottom:10px;font-weight:600;color:#6b7280;"></div>
-		<div class="umg-approval-comment" id="umg-log-details-text" style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px 12px;font-size:13px;color:#374151;"></div>
+		<div id="umg-log-details-text" style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px 12px;font-size:13px;color:#374151;"></div>
 		<div class="umg-modal-actions" style="margin-top:16px;">
 			<button type="button" class="umg-btn" id="umg-log-details-close"><?= _('Close') ?></button>
 		</div>
@@ -778,7 +805,7 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	}
 
 	// ---- Generic modal open/close + a single Esc handler that closes ----
-	// ---- whichever modal (incl. Audit Log / Settings / Details) or open dropdown is active. ----
+	// ---- whichever modal (incl. Audit Log / Pending Approvals / Settings / Details). ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
 
@@ -814,9 +841,6 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
 		openModal(ids);
 	});
-	// NEW: opens the same comment modal instead of flagging immediately with an
-	// empty comment — this was the reason the Comment column/CSV showed nothing
-	// for anything flagged from the toolbar.
 	document.getElementById('umg-flag-selected').addEventListener('click', function() {
 		var ids = getSelectedUserIds();
 		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
@@ -894,6 +918,20 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 		submitAction({ mode: 'reject', queue_index: rejectIndex, comment: rejectComment.value.trim() });
 		closeBackdrop(rejectBackdrop);
 	});
+
+	// NEW: Pending Approvals modal wiring — opened from the header button OR the
+	// new summary card.
+	var pendingBackdrop = document.getElementById('umg-pending-modal-backdrop');
+	document.getElementById('umg-pending-btn').addEventListener('click', function() {
+		openBackdrop(pendingBackdrop);
+	});
+	document.getElementById('umg-pending-modal-close').addEventListener('click', function() {
+		closeBackdrop(pendingBackdrop);
+	});
+	var pendingCard = document.getElementById('umg-pending-card');
+	if (pendingCard) {
+		pendingCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
+	}
 
 	// Audit Log modal wiring + client-side search/action/date filtering
 	var auditBackdrop = document.getElementById('umg-audit-modal-backdrop');
@@ -1083,9 +1121,6 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 	});
 
 	// CSV export of currently-visible rows, including the resolved activity comment.
-	// Any placeholder dash ("—", "-", empty) is normalized to a plain ASCII hyphen
-	// so it survives Excel's default (non-UTF8) CSV import instead of rendering as
-	// "â€"" mojibake.
 	function csvSafe(text) {
 		text = String(text == null ? '' : text).trim();
 		if (text === '' || text === '\u2014' || text === '\u2013' || text === '-') {
