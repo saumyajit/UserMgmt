@@ -46,21 +46,21 @@ $pending_count = count($pending_queue);
 			<span class="umg-page-header-icon">👥</span> <?= umg_esc($data['title']) ?>
 		</div>
 		<div class="umg-hdr-title-sub">
-			<?= _('Reviews Zabbix user accounts against a configurable inactivity policy, lets Super Admins flag or disable stale/never-logged-in users, and routes disable requests through an approval workflow with a full audit trail.') ?>
+			<?= _('Surfaces inactive Zabbix accounts for review and secure disabling through an auditable approval workflow.') ?>
 		</div>
 	</div>
 	<div class="umg-hdr-right">
 		<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
-			<span class="umg-btn-icon">&#128337;</span> <?= _('Audit Log') ?>
+			<span class="umg-btn-icon">&#128337;</span><?= _('Audit Log') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-pending-btn">
 			<span class="umg-btn-icon">&#9203;</span> <?= _('Approval Requests') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
-		📤 <?= _('Export CSV') ?>
+			📤 <?= _('Export CSV') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-settings-btn">
-		⚙️ <?= _('Settings') ?>
+			⚙️ <?= _('Settings') ?>
 		</button>
 	</div>
 </div>
