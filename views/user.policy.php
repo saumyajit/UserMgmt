@@ -24,12 +24,6 @@ $action_classes = [
 	'approve' => 'umg-badge-danger',
 	'reject' => 'umg-badge-info'
 ];
-$action_icons = [
-	'flag' => '&#9873;',
-	'disable' => '&#128683;',
-	'approve' => '&#9989;',
-	'reject' => '&#10060;'
-];
 
 // Approvers configured today (usernames), used to pre-seed the chip picker below.
 $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : [];
@@ -40,9 +34,17 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		<span class="umg-page-header-icon">&#128101;</span>
 		<h1><?= umg_esc($data['title']) ?></h1>
 	</div>
-	<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
-		<span class="umg-btn-icon">&#128337;</span> <?= _('Audit Log') ?>
-	</button>
+	<div class="umg-page-header-actions">
+		<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
+			<span class="umg-btn-icon">&#128337;</span> <?= _('Audit Log') ?>
+		</button>
+		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
+			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
+		</button>
+		<button type="button" class="umg-btn umg-btn-header" id="umg-settings-btn">
+			<span class="umg-btn-icon">&#9881;</span> <?= _('Settings') ?>
+		</button>
+	</div>
 </div>
 
 <style>
@@ -68,6 +70,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	.umg-page-header-title { display: flex; align-items: center; gap: 12px; }
 	.umg-page-header-icon { font-size: 26px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); }
 	.umg-page-header h1 { color: #fff; margin: 0; font-weight: 700; letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); }
 	.umg-btn-header:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
 
@@ -119,9 +122,6 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		box-shadow: 0 2px 6px rgba(79,95,237,0.35);
 	}
 	.umg-panel.umg-panel-approvals { border-top: 4px solid var(--umg-amber); background: linear-gradient(180deg, #fffdf6 0%, #ffffff 55%); }
-	.umg-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; align-items: start; }
-	.umg-row-2col .umg-panel { margin-bottom: 0; height: 100%; }
-	@media (max-width: 1100px) { .umg-row-2col { grid-template-columns: 1fr; } }
 	.umg-filter-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 	.umg-filter { display: flex; flex-direction: column; gap: 5px; }
 	.umg-filter label { font-size: 11px; color: #5f6b78; font-weight: 700; }
@@ -166,6 +166,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		background: #fff; border-radius: 12px; padding: 22px; width: 440px; max-width: 90vw;
 		box-shadow: 0 20px 55px rgba(31,20,70,0.30); animation: umg-pop-in .14s ease; border-top: 5px solid var(--umg-indigo);
 	}
+	.umg-modal-wide { width: 560px; }
 	@keyframes umg-pop-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 	.umg-modal h3 { margin: 0 0 12px 0; font-size: 16px; color: var(--umg-ink); }
 	.umg-modal label { font-size: 12px; font-weight: 700; color: #4b5563; }
@@ -175,6 +176,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	}
 	.umg-modal textarea:focus, .umg-modal input[type=text]:focus { outline: none; border-color: var(--umg-blue); box-shadow: 0 0 0 3px rgba(47,125,209,0.14); }
 	.umg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+	.umg-modal-subtitle { font-size: 12px; color: #8a94a3; margin: -6px 0 16px 0; }
 	.umg-row-hidden { display: none !important; }
 
 	button.umg-btn {
@@ -297,74 +299,33 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 </div>
 <?php endif; ?>
 
-<div class="umg-row-2col">
-	<div class="umg-panel">
-		<h2><span class="umg-h2-icon">&#128269;</span><?= _('Filter Users') ?></h2>
-		<div class="umg-filter-row">
-			<div class="umg-filter umg-filter-wide">
-				<label><?= _('User') ?></label>
-				<input type="text" id="umg-filter-username" placeholder="<?= _('Username') ?>">
-			</div>
-			<div class="umg-filter">
-				<label><?= _('Activity') ?></label>
-				<select id="umg-filter-activity">
-					<option value=""><?= _('All Users') ?></option>
-					<option value="never_logged_in"><?= _('Never Logged In') ?></option>
-					<option value="inactive"><?= _('Inactive') ?></option>
-					<option value="active"><?= _('Active') ?></option>
-					<option value="new_account"><?= _('New Account') ?></option>
-					<option value="already_disabled"><?= _('Already Disabled') ?></option>
-				</select>
-			</div>
-			<div class="umg-filter">
-				<label><?= _('Recommendation') ?></label>
-				<select id="umg-filter-recommendation">
-					<option value=""><?= _('All') ?></option>
-					<option value="disable"><?= _('Disable') ?></option>
-					<option value="no_action"><?= _('No Action') ?></option>
-				</select>
-			</div>
-			<button type="button" class="umg-btn" id="umg-filter-reset"><?= _('Reset') ?></button>
+<div class="umg-panel">
+	<h2><span class="umg-h2-icon">&#128269;</span><?= _('Filter Users') ?></h2>
+	<div class="umg-filter-row">
+		<div class="umg-filter umg-filter-wide">
+			<label><?= _('User') ?></label>
+			<input type="text" id="umg-filter-username" placeholder="<?= _('Username') ?>">
 		</div>
-	</div>
-
-	<div class="umg-panel">
-		<h2><span class="umg-h2-icon">&#9881;</span><?= _('Inactivity Policy (configurable)') ?></h2>
-		<div class="umg-filter-row">
-			<div class="umg-filter">
-				<label><?= _('Min. Account Age (days)') ?></label>
-				<input type="number" min="0" id="umg-cfg-min-age" value="<?= umg_esc($config['min_account_age_days']) ?>">
-			</div>
-			<div class="umg-filter">
-				<label><?= _('Inactivity Threshold (days)') ?></label>
-				<input type="number" min="0" id="umg-cfg-threshold" value="<?= umg_esc($config['inactivity_threshold_days']) ?>">
-			</div>
+		<div class="umg-filter">
+			<label><?= _('Activity') ?></label>
+			<select id="umg-filter-activity">
+				<option value=""><?= _('All Users') ?></option>
+				<option value="never_logged_in"><?= _('Never Logged In') ?></option>
+				<option value="inactive"><?= _('Inactive') ?></option>
+				<option value="active"><?= _('Active') ?></option>
+				<option value="new_account"><?= _('New Account') ?></option>
+				<option value="already_disabled"><?= _('Already Disabled') ?></option>
+			</select>
 		</div>
-
-		<div class="umg-filter-row" style="margin-top:12px;">
-			<div class="umg-filter umg-filter-wide" style="flex:1;">
-				<label><?= _('Approvers (Super Admins only; leave empty = any Super Admin)') ?></label>
-
-				<div class="umg-ms" id="umg-approvers-ms">
-					<div class="umg-ms-box" id="umg-approvers-box">
-						<span class="umg-ms-icon">&#128269;</span>
-						<input type="text" class="umg-ms-input" id="umg-approvers-input"
-							placeholder="<?= _('Search Super Admins...') ?>"
-							<?= !$superadmins ? 'disabled' : '' ?>>
-					</div>
-					<div class="umg-ms-dropdown" id="umg-approvers-dropdown"></div>
-				</div>
-				<script type="application/json" id="umg-superadmins-data"><?= json_encode($superadmins) ?></script>
-				<script type="application/json" id="umg-configured-approvers-data"><?= json_encode($configured_approvers) ?></script>
-
-				<span class="umg-subtext">
-					<?= $superadmins
-						? _('Type to search, click a name to add. Click × on a chip to remove.')
-						: _('No Super Admin accounts found.') ?>
-				</span>
-			</div>
-			<button type="button" class="umg-btn umg-btn-primary" id="umg-cfg-save">&#128190; <?= _('Save Policy') ?></button>
+		<div class="umg-filter">
+			<label><?= _('Recommendation') ?></label>
+			<select id="umg-filter-recommendation">
+				<option value=""><?= _('All') ?></option>
+				<option value="disable"><?= _('Disable') ?></option>
+				<option value="no_action"><?= _('No Action') ?></option>
+			</select>
 		</div>
+		<button type="button" class="umg-btn" id="umg-filter-reset"><?= _('Reset') ?></button>
 	</div>
 </div>
 
@@ -375,7 +336,6 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 			<span class="umg-match-count" id="umg-match-count"></span>
 		</div>
 		<div class="umg-toolbar">
-			<button type="button" class="umg-btn" id="umg-export-csv">&#11015; <?= _('Export CSV') ?></button>
 			<button type="button" class="umg-btn" id="umg-flag-selected">&#9873; <?= _('Flag Selected for Approval') ?></button>
 			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable Selected Users') ?></button>
 		</div>
@@ -534,7 +494,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 
 <!-- Audit Log modal (opened via the header "Audit Log" button, closes on Esc) -->
 <div class="umg-modal-backdrop" id="umg-audit-modal-backdrop">
-	<div class="umg-modal" style="width:640px;max-width:92vw;border-top-color: var(--umg-indigo);">
+	<div class="umg-modal umg-modal-wide" style="width:640px;border-top-color: var(--umg-indigo);">
 		<h3>&#128337; <?= _('Activity Log') ?> <span class="umg-count-pill"><?= count($activity_log) ?></span></h3>
 		<?php if ($activity_log): ?>
 		<div class="umg-log-wrap" style="max-height:60vh;">
@@ -561,6 +521,53 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		<?php endif; ?>
 		<div class="umg-modal-actions" style="margin-top:16px;">
 			<button type="button" class="umg-btn" id="umg-audit-modal-close"><?= _('Close') ?></button>
+		</div>
+	</div>
+</div>
+
+<!-- NEW: Settings modal — houses the full "Inactivity Policy (configurable)" panel,
+     opened via the header "Settings" button, closes on Esc like every other modal. -->
+<div class="umg-modal-backdrop" id="umg-settings-modal-backdrop">
+	<div class="umg-modal umg-modal-wide" style="border-top-color: var(--umg-indigo);">
+		<h3>&#9881; <?= _('Inactivity Policy Settings') ?></h3>
+		<div class="umg-modal-subtitle"><?= _('Controls which accounts are recommended for disabling, and who may approve disable requests.') ?></div>
+
+		<div class="umg-filter-row">
+			<div class="umg-filter">
+				<label><?= _('Min. Account Age (days)') ?></label>
+				<input type="number" min="0" id="umg-cfg-min-age" value="<?= umg_esc($config['min_account_age_days']) ?>">
+			</div>
+			<div class="umg-filter">
+				<label><?= _('Inactivity Threshold (days)') ?></label>
+				<input type="number" min="0" id="umg-cfg-threshold" value="<?= umg_esc($config['inactivity_threshold_days']) ?>">
+			</div>
+		</div>
+
+		<div class="umg-filter" style="margin-top:14px;">
+			<label><?= _('Approvers (Super Admins only; leave empty = any Super Admin)') ?></label>
+
+			<div class="umg-ms" id="umg-approvers-ms">
+				<div class="umg-ms-box" id="umg-approvers-box">
+					<span class="umg-ms-icon">&#128269;</span>
+					<input type="text" class="umg-ms-input" id="umg-approvers-input"
+						placeholder="<?= _('Search Super Admins...') ?>"
+						<?= !$superadmins ? 'disabled' : '' ?>>
+				</div>
+				<div class="umg-ms-dropdown" id="umg-approvers-dropdown"></div>
+			</div>
+			<script type="application/json" id="umg-superadmins-data"><?= json_encode($superadmins) ?></script>
+			<script type="application/json" id="umg-configured-approvers-data"><?= json_encode($configured_approvers) ?></script>
+
+			<span class="umg-subtext">
+				<?= $superadmins
+					? _('Type to search, click a name to add. Click × on a chip to remove.')
+					: _('No Super Admin accounts found.') ?>
+			</span>
+		</div>
+
+		<div class="umg-modal-actions" style="margin-top:18px;">
+			<button type="button" class="umg-btn" id="umg-settings-close"><?= _('Close') ?></button>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-cfg-save">&#128190; <?= _('Save Policy') ?></button>
 		</div>
 	</div>
 </div>
@@ -623,7 +630,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	}
 
 	// ---- Generic modal open/close + a single Esc handler that closes ----
-	// ---- whichever modal (incl. Audit Log) or open dropdown is active. ----
+	// ---- whichever modal (incl. Audit Log / Settings) or open dropdown is active. ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
 
@@ -745,9 +752,18 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		closeBackdrop(auditBackdrop);
 	});
 
+	// NEW: Settings modal wiring
+	var settingsBackdrop = document.getElementById('umg-settings-modal-backdrop');
+	document.getElementById('umg-settings-btn').addEventListener('click', function() {
+		openBackdrop(settingsBackdrop);
+	});
+	document.getElementById('umg-settings-close').addEventListener('click', function() {
+		closeBackdrop(settingsBackdrop);
+	});
+
 	// ---------------------------------------------------------------------
-	// Approvers chip picker (search-as-you-type + tags), replacing the
-	// plain <select multiple>. Mirrors the native Host multiselect UX.
+	// Approvers chip picker (search-as-you-type + tags), living inside the
+	// Settings modal. Mirrors the native Host multiselect UX.
 	// ---------------------------------------------------------------------
 	(function() {
 		var allUsers = JSON.parse(document.getElementById('umg-superadmins-data').textContent || '[]');
@@ -862,6 +878,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	});
 
 	// CSV export of currently-visible rows, including disablement comment
+	// (button now lives in the page header, order: Audit Log, Export CSV, Settings)
 	document.getElementById('umg-export-csv').addEventListener('click', function() {
 		var header = ['Username', 'User ID', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
 		var lines = [header.join(',')];
