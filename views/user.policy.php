@@ -34,28 +34,33 @@ define('UMG_LOG_COMMENT_TRUNCATE', 60);
 $pending_count = count($pending_queue);
 ?>
 
+<!-- NEW structure, matching the Maintenance Calendar reference exactly:
+     the title block is a separate ABSOLUTELY POSITIONED element centered
+     against the full header width (left:50%; transform:translateX(-50%)),
+     not a flex sibling of the buttons. That's what makes it truly centered
+     regardless of how many buttons are on the right, instead of only being
+     centered within the leftover space next to them. -->
 <div class="umg-page-header">
-	<div class="umg-page-header-title">
-		<span class="umg-page-header-icon">&#128101;</span>
-		<div>
-			<h1><?= umg_esc($data['title']) ?></h1>
-			<div class="umg-page-header-desc">
-				<?= _('Reviews Zabbix user accounts against a configurable inactivity policy, lets Super Admins flag or disable stale/never-logged-in users, and routes disable requests through an approval workflow with a full audit trail.') ?>
-			</div>
+	<div class="umg-hdr-title-center">
+		<div class="umg-hdr-title-main">
+			<span class="umg-page-header-icon">&#128101;</span> <?= umg_esc($data['title']) ?>
+		</div>
+		<div class="umg-hdr-title-sub">
+			<?= _('Reviews Zabbix user accounts against a configurable inactivity policy, lets Super Admins flag or disable stale/never-logged-in users, and routes disable requests through an approval workflow with a full audit trail.') ?>
 		</div>
 	</div>
-	<div class="umg-page-header-actions">
+	<div class="umg-hdr-right">
 		<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
 			<span class="umg-btn-icon">&#128337;</span> <?= _('Audit Log') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-pending-btn">
-			<span class="umg-btn-icon">&#9203;</span> <?= _('Pending Approvals') ?>
+			<span class="umg-btn-icon">&#9203;</span> <?= _('Approval Requests') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
 			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-settings-btn">
-			⚙️ <?= _('Settings') ?>
+			<span class="umg-btn-icon">&#9881;</span> <?= _('Settings') ?>
 		</button>
 	</div>
 </div>
@@ -75,76 +80,111 @@ $pending_count = count($pending_queue);
     --umg-modal-header-bg: linear-gradient(135deg, #1a3a5c 0%, #1e5799 55%, #2e86c1 100%);
 }
 
-/* Page header */
+/* Page header — same technique as #calendarHeader / .hdr-title-center in the
+   Maintenance Calendar reference: relative positioning context + min-height
+   on the header, with the title block absolutely centered against the FULL
+   width via left:50% + translateX(-50%), and the buttons pinned right with
+   margin-left:auto. This guarantees true centering no matter how many
+   buttons are on the right, unlike flex space-between. */
 .umg-page-header {
+    position: relative;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    background: linear-gradient(120deg, var(--umg-indigo) 0%, var(--umg-purple) 55%, var(--umg-blue) 100%);
-    border-radius: 10px;
-    padding: 18px 22px;
+    min-height: 100px;
+    background: linear-gradient(135deg, #1a3a5c 0%, #1e5799 55%, #2e86c1 100%);
+    border-radius: 20px;
+    padding: 0 20px;
     margin-bottom: 20px;
-    box-shadow: 0 8px 22px rgba(79,95,237,0.25);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.22);
+    flex-wrap: wrap;
+    row-gap: 8px;
 }
 
-.umg-page-header-title {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
+.umg-hdr-title-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    line-height: 1.25;
+    max-width: 62%;
+    color: #fff;
+}
+
+.umg-hdr-title-main {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    padding-bottom: 4px;
+    padding-top: 4px;
 }
 
 .umg-page-header-icon {
-    font-size: 26px;
-    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
-    margin-top: 2px;
+    font-size: 20px;
+    vertical-align: -2px;
 }
 
-.umg-page-header h1 {
-    color: #fff;
-    margin: 0;
-    font-weight: 700;
-    letter-spacing: .01em;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
-}
-
-.umg-page-header-desc {
-    color: rgba(255,255,255,0.88);
-    font-size: 12.5px;
-    margin-top: 5px;
-    max-width: 620px;
+.umg-hdr-title-sub {
+    font-size: 12px;
+    opacity: .85;
+    font-weight: 500;
+    letter-spacing: .2px;
+    padding-top: 10px;
     line-height: 1.5;
 }
 
-.umg-page-header-actions {
+.umg-hdr-right {
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-    align-self: center;
-    margin-left: auto;
+    position: relative;
+    z-index: 1;
 }
 
-.umg-btn-header {
-    background: rgba(255,255,255,0.16);
-    border: 1px solid rgba(255,255,255,0.35);
-    color: #fff;
-    font-weight: 700;
-    backdrop-filter: blur(2px);
-    white-space: nowrap;
+/* Header buttons: translucent glass pills, matching .hdr-btn in the
+   reference. Selector kept at element+2classes specificity so it can never
+   be silently overridden by the plain "button.umg-btn" rule below. */
+button.umg-btn.umg-btn-header {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    padding: 0px 10px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.55);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    height: auto;
+    white-space: nowrap;
+    transition: all .18s ease;
 }
 
-.umg-btn-header:hover {
-    background: rgba(255,255,255,0.28);
-    border-color: rgba(255,255,255,0.6);
+button.umg-btn.umg-btn-header:hover {
+    background: rgba(255,255,255,0.30);
+    border-color: #fff;
+}
+
+button.umg-btn.umg-btn-header:active {
+    transform: translateY(1px);
 }
 
 body, .wrapper {
     background: linear-gradient(180deg, #f3f5fb 0%, #eef1fa 100%);
+    font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Tahoma, sans-serif;
+}
+
+.wrapper {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    overflow: auto;
+    position: relative;
+    padding: 4px;
 }
 
 /* Summary cards */
@@ -307,7 +347,7 @@ body, .wrapper {
     color: var(--umg-indigo);
 }
 
-/* Pending Approvals list (rendered inside the Pending Approvals modal) */
+/* Pending Approvals list (rendered inside the Approval Requests modal) */
 .umg-approval-item {
     display: flex;
     justify-content: space-between;
@@ -413,7 +453,7 @@ body, .wrapper {
     min-width: 260px;
 }
 
-/* Inactive User Review table */
+/* User Review table */
 .umg-table-wrap {
     overflow: auto;
     max-height: 520px;
@@ -584,7 +624,7 @@ body, .wrapper {
     flex-wrap: wrap;
 }
 
-/* Modals (Disable/Flag, Approve, Reject, Pending Approvals, Audit Log,
+/* Modals (Disable/Flag, Approve, Reject, Approval Requests, Audit Log,
    Change Details, Settings) share one backdrop + header style */
 .umg-modal-backdrop {
     display: none;
@@ -650,6 +690,7 @@ body, .wrapper {
     align-items: center;
     gap: 10px;
     font-size: 16px;
+    text-transform: none;
 }
 
 .umg-modal-header .umg-modal-close-x {
@@ -715,7 +756,11 @@ body, .wrapper {
     display: none !important;
 }
 
-/* Buttons */
+/* Buttons — base style is a readable light background + dark text. The
+   pill / translucent-white style is scoped ONLY to
+   "button.umg-btn.umg-btn-header" above, so Cancel/Reset/Close/Clear
+   buttons elsewhere (on white panels/modals) stay visible instead of
+   rendering as white-on-white. */
 button.umg-btn {
     height: 34px;
     border: 1.5px solid #dde1ea;
@@ -1044,6 +1089,20 @@ button.umg-btn-sm {
     color: #8a94a3;
 }
 
+/* "Change Details" popup meta card */
+.detail-card {
+    background: #fff;
+    border: 1px solid #e0e4ef;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+}
+
+.detail-card p {
+    margin: 4px 0;
+}
+
 /* Developer footer */
 .developer-footer {
     margin: 30px 0 10px;
@@ -1267,7 +1326,7 @@ button.umg-btn-sm {
 	</div>
 </div>
 
-<!-- Disable / Flag modal — also reused by the toolbar "Flag Selected for Approval" button. -->
+<!-- Disable / Flag modal — also reused by the toolbar "Request for Approval" button. -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
 	<div class="umg-modal">
 		<div class="umg-modal-header">
@@ -1318,11 +1377,11 @@ button.umg-btn-sm {
 	</div>
 </div>
 
-<!-- Pending Approvals modal — opened via the header button or the summary card. -->
+<!-- Approval Requests modal — opened via the header button or the summary card. -->
 <div class="umg-modal-backdrop" id="umg-pending-modal-backdrop">
 	<div class="umg-modal umg-modal-xwide">
 		<div class="umg-modal-header">
-			<h3>&#9203; <?= _('Approval Requests') ?></h3>
+			<h3>&#9203; <?= _('Pending for Approval') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-pending-modal-close">&times;</button>
 		</div>
 
@@ -1578,7 +1637,7 @@ button.umg-btn-sm {
 	});
 
 	// Disable / Flag modal (shared by row-level Disable button AND the toolbar
-	// "Flag Selected for Approval" button, so a comment can always be added).
+	// "Request for Approval" button, so a comment can always be added).
 	var modalBackdrop = document.getElementById('umg-modal-backdrop');
 	var modalUserlist = document.getElementById('umg-modal-userlist');
 	var modalComment = document.getElementById('umg-modal-comment');
@@ -1682,7 +1741,7 @@ button.umg-btn-sm {
 		closeBackdrop(rejectBackdrop);
 	});
 
-	// Pending Approvals modal wiring — opened from the header button OR the summary card.
+	// Approval Requests modal wiring — opened from the header button OR the summary card.
 	var pendingBackdrop = document.getElementById('umg-pending-modal-backdrop');
 	document.getElementById('umg-pending-btn').addEventListener('click', function() {
 		openBackdrop(pendingBackdrop);
@@ -1935,5 +1994,5 @@ button.umg-btn-sm {
 </script>
 
 <div class="developer-footer">
-    <strong>Developed By:</strong> Saumyajit Pramanik
+	<strong>Developed By:</strong> Saumyajit Pramanik
 </div>
