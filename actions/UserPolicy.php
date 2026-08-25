@@ -122,8 +122,30 @@ class UserPolicy extends CController {
 
 		/*
 		 * ------------------------------------------------------------
+		 * 1a. NEW: Resolve which of these users hold a Super Admin role,
+		 * so the "Approvers" picker on the config panel can only ever
+		 * offer Super Admins (per policy: approvers must be Super Admins).
+		 * ------------------------------------------------------------
+		 */
+		$superadmin_roles = API::Role()->get([
+			'output' => ['roleid'],
+			'filter' => ['type' => USER_TYPE_SUPER_ADMIN]
+		]);
+		$superadmin_roleids = array_column($superadmin_roles, 'roleid');
+
+		$superadmins = [];
+		foreach ($users as $u) {
+			if (in_array($u['roleid'], $superadmin_roleids)) {
+				$superadmins[] = [
+					'userid' => $u['userid'],
+					'username' => $u['username']
+				];
+			}
+		}
+
+		/*
+		 * ------------------------------------------------------------
 		 * 2. Get user creation audit records
-		 *
 		 * action = 0 -> Add, resourcetype = 0 -> User
 		 * ------------------------------------------------------------
 		 */
@@ -145,7 +167,6 @@ class UserPolicy extends CController {
 		/*
 		 * ------------------------------------------------------------
 		 * 3. Get login audit records
-		 *
 		 * action = 8 -> Login, resourcetype = 0 -> User
 		 * ------------------------------------------------------------
 		 */
@@ -182,6 +203,7 @@ class UserPolicy extends CController {
 				$pending_queue[] = $entry;
 			}
 		}
+
 		usort($pending_queue, function ($a, $b) {
 			return ($b['flagged_at'] ?? 0) <=> ($a['flagged_at'] ?? 0);
 		});
@@ -195,6 +217,7 @@ class UserPolicy extends CController {
 		foreach ($disabled_log as $entry) {
 			$disable_comments[(string) $entry['userid']] = $entry;
 		}
+
 		foreach ($activity_log as $entry) {
 			if (in_array($entry['action'] ?? '', ['disable', 'approve'], true)) {
 				$existing = $disable_comments[(string) $entry['userid']] ?? null;
@@ -204,7 +227,7 @@ class UserPolicy extends CController {
 			}
 		}
 
-		// Newest-first slice for the on-page Activity Log panel.
+		// Newest-first slice powering the Audit Log popup.
 		$activity_log_display = $activity_log;
 		usort($activity_log_display, function ($a, $b) {
 			return ($b['clock'] ?? 0) <=> ($a['clock'] ?? 0);
@@ -215,12 +238,12 @@ class UserPolicy extends CController {
 		 * ------------------------------------------------------------
 		 * 4. Compute policy fields per user
 		 *
-		 *   creation_age > min_account_age_days
-		 *     AND last_login is NULL                        => DISABLE (never_logged_in)
-		 *   creation_age > min_account_age_days
-		 *     AND last_login exists
-		 *     AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
-		 *   Everything else                                  => NO ACTION
+		 * creation_age > min_account_age_days
+		 *   AND last_login is NULL => DISABLE (never_logged_in)
+		 * creation_age > min_account_age_days
+		 *   AND last_login exists
+		 *   AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
+		 * Everything else => NO ACTION
 		 * ------------------------------------------------------------
 		 */
 		foreach ($users as &$user) {
@@ -310,7 +333,10 @@ class UserPolicy extends CController {
 			'config' => $config,
 			'summary' => $summary,
 			'pending_queue' => $pending_queue,
-			'activity_log' => $activity_log_display
+			'activity_log' => $activity_log_display,
+			// NEW: passed to the view so the Approvers field can render as a
+			// multi-select restricted to Super Admin accounts only.
+			'superadmins' => $superadmins
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
