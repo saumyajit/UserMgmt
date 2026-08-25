@@ -432,7 +432,7 @@ body, .wrapper {
 
 .umg-filter select, .umg-filter input {
     height: 30px;
-    border: 1.5px solid #dde1ea;
+    border: 1.5px solid #a08fad;
     border-radius: 20px;
     padding: 0 10px;
     min-width: 170px;
@@ -763,7 +763,7 @@ body, .wrapper {
    rendering as white-on-white. */
 button.umg-btn {
     height: 34px;
-    border: 1.5px solid #dde1ea;
+    border: 1.5px solid #a08fad;
     background: #fff;
     border-radius: 7px;
     padding: 0 16px;
