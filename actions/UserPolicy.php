@@ -52,7 +52,10 @@ class UserPolicy extends CController {
 				: $defaults['min_account_age_days'],
 			'inactivity_threshold_days' => isset($decoded['inactivity_threshold_days'])
 				? (int) $decoded['inactivity_threshold_days']
-				: $defaults['inactivity_threshold_days']
+				: $defaults['inactivity_threshold_days'],
+			'approvers' => isset($decoded['approvers']) && is_array($decoded['approvers'])
+				? $decoded['approvers']
+				: []
 		];
 	}
 
@@ -71,6 +74,19 @@ class UserPolicy extends CController {
 
 	private static function loadDisabledLog(): array {
 		$file = __DIR__ . '/../data/disabled_log.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function loadActivityLog(): array {
+		$file = __DIR__ . '/../data/activity_log.json';
 
 		if (!is_file($file)) {
 			return [];
@@ -106,8 +122,29 @@ class UserPolicy extends CController {
 
 		/*
 		 * ------------------------------------------------------------
+		 * 1a. Resolve which of these users hold a Super Admin role, so the
+		 * "Approvers" picker (Settings modal) only ever offers Super Admins.
+		 * ------------------------------------------------------------
+		 */
+		$superadmin_roles = API::Role()->get([
+			'output' => ['roleid'],
+			'filter' => ['type' => USER_TYPE_SUPER_ADMIN]
+		]);
+		$superadmin_roleids = array_column($superadmin_roles, 'roleid');
+
+		$superadmins = [];
+		foreach ($users as $u) {
+			if (in_array($u['roleid'], $superadmin_roleids)) {
+				$superadmins[] = [
+					'userid' => $u['userid'],
+					'username' => $u['username']
+				];
+			}
+		}
+
+		/*
+		 * ------------------------------------------------------------
 		 * 2. Get user creation audit records
-		 *
 		 * action = 0 -> Add, resourcetype = 0 -> User
 		 * ------------------------------------------------------------
 		 */
@@ -129,7 +166,6 @@ class UserPolicy extends CController {
 		/*
 		 * ------------------------------------------------------------
 		 * 3. Get login audit records
-		 *
 		 * action = 8 -> Login, resourcetype = 0 -> User
 		 * ------------------------------------------------------------
 		 */
@@ -166,26 +202,56 @@ class UserPolicy extends CController {
 				$pending_queue[] = $entry;
 			}
 		}
+
 		usort($pending_queue, function ($a, $b) {
 			return ($b['flagged_at'] ?? 0) <=> ($a['flagged_at'] ?? 0);
 		});
 
 		$disabled_log = self::loadDisabledLog();
-		$disable_comments = [];
+		$activity_log = self::loadActivityLog();
+
+		/*
+		 * Per-user "latest activity" entry: newest matching entry across the
+		 * legacy disabled_log.json plus EVERY action type in activity_log.json
+		 * (flag / disable / approve / reject) — not just disable/approve as
+		 * before. Widening this is what makes the Comment column (and the CSV
+		 * export) actually populate for users whose only recorded action so
+		 * far is a flag or a rejection, instead of showing "-" for almost
+		 * everyone.
+		 */
+		$latest_activity = [];
 		foreach ($disabled_log as $entry) {
-			$disable_comments[(string) $entry['userid']] = $entry;
+			$latest_activity[(string) $entry['userid']] = $entry;
 		}
+
+		foreach ($activity_log as $entry) {
+			$uid = (string) ($entry['userid'] ?? '');
+			if ($uid === '') {
+				continue;
+			}
+			$existing = $latest_activity[$uid] ?? null;
+			if (!$existing || ($entry['clock'] ?? 0) >= ($existing['clock'] ?? 0)) {
+				$latest_activity[$uid] = $entry;
+			}
+		}
+
+		// Newest-first slice powering the Audit Log popup.
+		$activity_log_display = $activity_log;
+		usort($activity_log_display, function ($a, $b) {
+			return ($b['clock'] ?? 0) <=> ($a['clock'] ?? 0);
+		});
+		$activity_log_display = array_slice($activity_log_display, 0, 100);
 
 		/*
 		 * ------------------------------------------------------------
 		 * 4. Compute policy fields per user
 		 *
-		 *   creation_age > min_account_age_days
-		 *     AND last_login is NULL                        => DISABLE (never_logged_in)
-		 *   creation_age > min_account_age_days
-		 *     AND last_login exists
-		 *     AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
-		 *   Everything else                                  => NO ACTION
+		 * creation_age > min_account_age_days
+		 *   AND last_login is NULL => DISABLE (never_logged_in)
+		 * creation_age > min_account_age_days
+		 *   AND last_login exists
+		 *   AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
+		 * Everything else => NO ACTION
 		 * ------------------------------------------------------------
 		 */
 		foreach ($users as &$user) {
@@ -235,6 +301,8 @@ class UserPolicy extends CController {
 				$reason = 'active';
 			}
 
+			$latest = $latest_activity[$userid] ?? null;
+
 			$user['creation_clock'] = $creation_clock;
 			$user['creation_age_days'] = $creation_age_days;
 			$user['last_login_clock'] = $last_login_clock;
@@ -243,9 +311,13 @@ class UserPolicy extends CController {
 			$user['reason'] = $reason;
 			$user['pending_approval'] = isset($pending_userids[$userid]);
 			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
-			$user['disable_comment'] = $disable_comments[$userid]['comment'] ?? null;
-			$user['disabled_by'] = $disable_comments[$userid]['actor'] ?? null;
-			$user['disabled_at'] = $disable_comments[$userid]['clock'] ?? null;
+			// NEW: last recorded activity for this user, of any action type,
+			// plus who performed it and when — used to populate the Comment
+			// column (and CSV) whenever a disable comment specifically isn't set.
+			$user['last_action'] = $latest['action'] ?? null;
+			$user['disable_comment'] = $latest['comment'] ?? null;
+			$user['disabled_by'] = $latest['actor'] ?? null;
+			$user['disabled_at'] = $latest['clock'] ?? null;
 		}
 		unset($user);
 
@@ -274,7 +346,9 @@ class UserPolicy extends CController {
 			'login_logs' => array_slice($login_logs, 0, 50),
 			'config' => $config,
 			'summary' => $summary,
-			'pending_queue' => $pending_queue
+			'pending_queue' => $pending_queue,
+			'activity_log' => $activity_log_display,
+			'superadmins' => $superadmins
 		];
 
 		$this->setResponse(new CControllerResponseData($data));

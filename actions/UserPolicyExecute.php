@@ -8,7 +8,8 @@ use CController;
 class UserPolicyExecute extends CController {
 
 	const APPROVAL_QUEUE_FILE = __DIR__ . '/../data/approval_queue.json';
-	const DISABLED_LOG_FILE = __DIR__ . '/../data/disabled_log.json';
+	const ACTIVITY_LOG_FILE = __DIR__ . '/../data/activity_log.json';
+	const CONFIG_FILE = __DIR__ . '/../data/policy_config.json';
 
 	public function init(): void {
 		$this->disableCsrfValidation();
@@ -35,42 +36,69 @@ class UserPolicyExecute extends CController {
 		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
 
-	private static function loadQueue(): array {
-		if (!is_file(self::APPROVAL_QUEUE_FILE)) {
+	private static function loadJsonFile(string $file): array {
+		if (!is_file($file)) {
 			return [];
 		}
-		$raw = @file_get_contents(self::APPROVAL_QUEUE_FILE);
+		$raw = @file_get_contents($file);
 		$decoded = $raw !== false ? json_decode($raw, true) : null;
 		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function saveJsonFile(string $file, array $data): bool {
+		$dir = dirname($file);
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		return @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT)) !== false;
+	}
+
+	private static function loadQueue(): array {
+		return self::loadJsonFile(self::APPROVAL_QUEUE_FILE);
 	}
 
 	private static function saveQueue(array $queue): bool {
-		$dir = dirname(self::APPROVAL_QUEUE_FILE);
-		if (!is_dir($dir)) {
-			@mkdir($dir, 0755, true);
-		}
-		return @file_put_contents(self::APPROVAL_QUEUE_FILE, json_encode($queue, JSON_PRETTY_PRINT)) !== false;
+		return self::saveJsonFile(self::APPROVAL_QUEUE_FILE, $queue);
 	}
 
-	private static function loadDisabledLog(): array {
-		if (!is_file(self::DISABLED_LOG_FILE)) {
-			return [];
-		}
-		$raw = @file_get_contents(self::DISABLED_LOG_FILE);
-		$decoded = $raw !== false ? json_decode($raw, true) : null;
-		return is_array($decoded) ? $decoded : [];
-	}
-
-	private static function saveDisabledLog(array $log): bool {
-		$dir = dirname(self::DISABLED_LOG_FILE);
-		if (!is_dir($dir)) {
-			@mkdir($dir, 0755, true);
-		}
-		return @file_put_contents(self::DISABLED_LOG_FILE, json_encode($log, JSON_PRETTY_PRINT)) !== false;
+	/**
+	 * Single append-only trail of every comment/action taken through this module —
+	 * flag, disable, approve, reject — independent of Zabbix's own audit log (which
+	 * has no room for our comments). UserPolicy.php reads this to show the "Comment"
+	 * column and a scrollable Activity Log panel.
+	 */
+	private static function logActivity(string $action, string $userid, string $username, string $comment, string $actor, array $extra = []): void {
+		$log = self::loadJsonFile(self::ACTIVITY_LOG_FILE);
+		$log[] = array_merge([
+			'action' => $action,
+			'userid' => $userid,
+			'username' => $username,
+			'comment' => $comment,
+			'actor' => $actor,
+			'clock' => time()
+		], $extra);
+		self::saveJsonFile(self::ACTIVITY_LOG_FILE, $log);
 	}
 
 	private static function currentActor(): string {
 		return \CWebUser::$data['username'] ?? 'unknown';
+	}
+
+	private static function loadApprovers(): array {
+		$config = self::loadJsonFile(self::CONFIG_FILE);
+		return isset($config['approvers']) && is_array($config['approvers']) ? $config['approvers'] : [];
+	}
+
+	/**
+	 * If an approver allowlist has been configured, only usernames on it may approve
+	 * or reject. An empty list means "any Super Admin" (the original behaviour).
+	 */
+	private function enforceApproverPermission(string $actor): void {
+		$approvers = self::loadApprovers();
+
+		if ($approvers && !in_array($actor, $approvers, true)) {
+			$this->respondJson(false, _('You are not on the approver list for this module.'));
+		}
 	}
 
 	/**
@@ -101,13 +129,11 @@ class UserPolicyExecute extends CController {
 	}
 
 	/**
-	 * Disables the given users (via group membership, see above) and appends one
-	 * disabled_log.json entry per user recording who/why, so it can be exported later.
+	 * Disables the given users (via group membership, see above) and logs one
+	 * activity entry per user.
 	 */
-	private static function disableUsers(array $userids, string $comment, string $actor): void {
+	private static function disableUsers(array $userids, string $comment, string $actor, string $action = 'disable'): void {
 		$disabled_usrgrpid = self::getOrCreateDisabledUsrgrp();
-		$log = self::loadDisabledLog();
-		$now = time();
 
 		foreach ($userids as $userid) {
 			$user = API::User()->get([
@@ -133,16 +159,8 @@ class UserPolicyExecute extends CController {
 				}, $usrgrpids)
 			]);
 
-			$log[] = [
-				'userid' => (string) $userid,
-				'username' => $user[0]['username'],
-				'comment' => $comment,
-				'actor' => $actor,
-				'clock' => $now
-			];
+			self::logActivity($action, (string) $userid, $user[0]['username'], $comment, $actor);
 		}
-
-		self::saveDisabledLog($log);
 	}
 
 	private function respondJson(bool $success, string $message, array $extra = []): void {
@@ -170,13 +188,19 @@ class UserPolicyExecute extends CController {
 			$now = time();
 
 			foreach ($userids as $userid) {
+				$user = API::User()->get(['output' => ['username'], 'userids' => [$userid]]);
+				$username = $user ? $user[0]['username'] : '';
+
 				$queue[] = [
 					'userid' => (string) $userid,
+					'username' => $username,
 					'status' => 'pending',
 					'comment' => $comment,
 					'flagged_by' => $actor,
 					'flagged_at' => $now
 				];
+
+				self::logActivity('flag', (string) $userid, $username, $comment, $actor);
 			}
 
 			if (!self::saveQueue($queue)) {
@@ -187,6 +211,8 @@ class UserPolicyExecute extends CController {
 		}
 
 		if ($mode === 'approve') {
+			$this->enforceApproverPermission($actor);
+
 			$queue_index = $this->getInput('queue_index', null);
 
 			if ($queue_index === null) {
@@ -200,10 +226,13 @@ class UserPolicyExecute extends CController {
 			}
 
 			$entry = $queue[$queue_index];
-			$final_comment = $comment !== '' ? $comment : ($entry['comment'] ?? '');
+			$approver_comment = $comment;
+			$final_comment = $approver_comment !== ''
+				? $approver_comment . ($entry['comment'] ? ' | Request: ' . $entry['comment'] : '')
+				: ($entry['comment'] ?? '');
 
 			try {
-				self::disableUsers([$entry['userid']], $final_comment, $actor);
+				self::disableUsers([$entry['userid']], $final_comment, $actor, 'approve');
 			}
 			catch (\Exception $e) {
 				$this->respondJson(false, $e->getMessage());
@@ -212,12 +241,15 @@ class UserPolicyExecute extends CController {
 			$queue[$queue_index]['status'] = 'disabled';
 			$queue[$queue_index]['resolved_by'] = $actor;
 			$queue[$queue_index]['resolved_at'] = time();
+			$queue[$queue_index]['approver_comment'] = $approver_comment;
 			self::saveQueue($queue);
 
 			$this->respondJson(true, _('User disabled.'));
 		}
 
 		if ($mode === 'reject') {
+			$this->enforceApproverPermission($actor);
+
 			$queue_index = $this->getInput('queue_index', null);
 
 			if ($queue_index === null) {
@@ -236,6 +268,8 @@ class UserPolicyExecute extends CController {
 			$queue[$queue_index]['reject_reason'] = $comment;
 			self::saveQueue($queue);
 
+			self::logActivity('reject', (string) $queue[$queue_index]['userid'], $queue[$queue_index]['username'] ?? '', $comment, $actor);
+
 			$this->respondJson(true, _('Request rejected.'));
 		}
 
@@ -249,7 +283,7 @@ class UserPolicyExecute extends CController {
 		}
 
 		try {
-			self::disableUsers($userids, $comment, $actor);
+			self::disableUsers($userids, $comment, $actor, 'disable');
 		}
 		catch (\Exception $e) {
 			$this->respondJson(false, $e->getMessage());
