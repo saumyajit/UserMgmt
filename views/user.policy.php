@@ -57,7 +57,7 @@ $pending_count = count($pending_queue);
 			<span class="umg-btn-icon">&#9203;</span> <?= _('Approval Requests') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
-			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
+		📤 <?= _('Export CSV') ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-settings-btn">
 		⚙️ <?= _('Settings') ?>
