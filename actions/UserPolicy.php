@@ -24,10 +24,6 @@ class UserPolicy extends CController {
 		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
 
-	private static function currentActor(): string {
-		return \CWebUser::$data['username'] ?? 'unknown';
-	}
-
 	/**
 	 * Duplicated intentionally in UserPolicyExecute.php and UserPolicyConfig.php
 	 * so no cross-file class/namespace dependency exists outside of registered
@@ -105,7 +101,6 @@ class UserPolicy extends CController {
 	protected function doAction(): void {
 		$config = self::loadConfig();
 		$now = time();
-		$current_actor = self::currentActor();
 
 		/*
 		 * ------------------------------------------------------------
@@ -191,14 +186,11 @@ class UserPolicy extends CController {
 		}
 
 		$approval_queue = self::loadApprovalQueue();
-
-		// Per-user lookups for the two "active" queue states this page cares
-		// about: 'pending' (awaiting approve/reject) and 'approved' (approved,
-		// but not yet disabled by a second, different Super Admin).
 		$pending_userids = [];
 		$approved_userids = [];
 		foreach ($approval_queue as $index => $entry) {
 			$status = $entry['status'] ?? '';
+			$entry['queue_index'] = $index;
 			if ($status === 'pending') {
 				$pending_userids[(string) $entry['userid']] = $entry;
 			}
@@ -210,15 +202,17 @@ class UserPolicy extends CController {
 		// Newest-first list of pending entries for the approvals panel, each tagged
 		// with its index in the queue file so approve/reject can address it directly.
 		$pending_queue = [];
+		// Newest-first list of approved-but-not-yet-disabled entries — these are
+		// ready for the separate "Disable" step, which must be performed by a
+		// Super Admin other than whoever originally flagged the request.
 		$approved_queue = [];
 		foreach ($approval_queue as $index => $entry) {
 			$status = $entry['status'] ?? '';
+			$entry['queue_index'] = $index;
 			if ($status === 'pending') {
-				$entry['queue_index'] = $index;
 				$pending_queue[] = $entry;
 			}
 			elseif ($status === 'approved') {
-				$entry['queue_index'] = $index;
 				$approved_queue[] = $entry;
 			}
 		}
@@ -236,8 +230,11 @@ class UserPolicy extends CController {
 		/*
 		 * Per-user "latest activity" entry: newest matching entry across the
 		 * legacy disabled_log.json plus EVERY action type in activity_log.json
-		 * (flag / approve / reject / disable). Powers the Comment column data
-		 * exported via CSV and the audit trail shown elsewhere.
+		 * (flag / disable / approve / reject) — not just disable/approve as
+		 * before. Widening this is what makes the Comment column (and the CSV
+		 * export) actually populate for users whose only recorded action so
+		 * far is a flag or a rejection, instead of showing "-" for almost
+		 * everyone.
 		 */
 		$latest_activity = [];
 		foreach ($disabled_log as $entry) {
@@ -321,7 +318,6 @@ class UserPolicy extends CController {
 				$reason = 'active';
 			}
 
-			$approved_entry = $approved_userids[$userid] ?? null;
 			$latest = $latest_activity[$userid] ?? null;
 
 			$user['creation_clock'] = $creation_clock;
@@ -332,13 +328,11 @@ class UserPolicy extends CController {
 			$user['reason'] = $reason;
 			$user['pending_approval'] = isset($pending_userids[$userid]);
 			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
-			// NEW: approved-but-not-yet-disabled state, plus who approved it
-			// (needed client-side to grey out the Disable button for that
-			// same person — the server enforces the "different person" rule
-			// independently, this is just a UX hint).
-			$user['approved_awaiting_disable'] = $approved_entry !== null;
-			$user['approved_queue_index'] = $approved_entry['queue_index'] ?? null;
-			$user['approved_by'] = $approved_entry['approved_by'] ?? null;
+			$user['approved_pending'] = isset($approved_userids[$userid]);
+			$user['approved_queue_index'] = $approved_userids[$userid]['queue_index'] ?? null;
+			// NEW: last recorded activity for this user, of any action type,
+			// plus who performed it and when — used to populate the Comment
+			// column (and CSV) whenever a disable comment specifically isn't set.
 			$user['last_action'] = $latest['action'] ?? null;
 			$user['disable_comment'] = $latest['comment'] ?? null;
 			$user['disabled_by'] = $latest['actor'] ?? null;
@@ -372,14 +366,9 @@ class UserPolicy extends CController {
 			'config' => $config,
 			'summary' => $summary,
 			'pending_queue' => $pending_queue,
-			// NEW: approved-but-not-yet-disabled requests, for the second half
-			// of the two-person disable workflow.
 			'approved_queue' => $approved_queue,
 			'activity_log' => $activity_log_display,
-			'superadmins' => $superadmins,
-			// NEW: exposed so the view can grey out / warn on a Disable button
-			// when the current viewer is the same person who approved it.
-			'current_actor' => $current_actor
+			'superadmins' => $superadmins
 		];
 
 		$this->setResponse(new CControllerResponseData($data));
