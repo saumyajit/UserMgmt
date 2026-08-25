@@ -792,9 +792,9 @@ button.umg-btn:disabled {
 }
 
 button.umg-btn-danger {
-    background: linear-gradient(135deg, var(--umg-red), var(--umg-red-dark));
+    background: #fff;
     border-color: var(--umg-red-dark);
-    color: #fff;
+    color: #374151;
     box-shadow: 0 4px 12px rgba(209,58,73,0.30);
 }
 
@@ -1197,7 +1197,7 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-toolbar">
 			<button type="button" class="umg-btn" id="umg-flag-selected">&#9873; <?= _('Request for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable Selected Users') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable User/s') ?></button>
 		</div>
 	</div>
 
