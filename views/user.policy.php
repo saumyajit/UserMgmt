@@ -50,7 +50,6 @@ $pending_count = count($pending_queue);
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-pending-btn">
 			<span class="umg-btn-icon">&#9203;</span> <?= _('Pending Approvals') ?>
-			<?php if ($pending_count > 0): ?><span class="umg-header-badge"><?= umg_esc($pending_count) ?></span><?php endif; ?>
 		</button>
 		<button type="button" class="umg-btn umg-btn-header" id="umg-export-csv">
 			<span class="umg-btn-icon">&#11015;</span> <?= _('Export CSV') ?>
@@ -73,6 +72,7 @@ $pending_count = count($pending_queue);
 		--umg-red-dark: #d13a49;
 		--umg-purple: #8a5fd6;
 		--umg-ink: #1f2937;
+		--umg-modal-header-bg: linear-gradient(135deg, #1a3a5c 0%, #1e5799 55%, #2e86c1 100%);
 	}
 
 	.umg-page-header {
@@ -88,11 +88,6 @@ $pending_count = count($pending_queue);
 	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; align-self: center; margin-left: auto; }
 	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 	.umg-btn-header:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
-	.umg-header-badge {
-		display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
-		background: var(--umg-red); color: #fff; font-size: 10.5px; font-weight: 800; border-radius: 9px;
-		box-shadow: 0 0 0 2px rgba(255,255,255,0.35);
-	}
 
 	body, .wrapper { background: linear-gradient(180deg, #f3f5fb 0%, #eef1fa 100%); }
 
@@ -130,7 +125,6 @@ $pending_count = count($pending_queue);
 	.umg-card.umg-accent-purple .umg-card-icon { background: linear-gradient(135deg, rgba(138,95,214,0.18), rgba(195,166,239,0.18)); color: var(--umg-purple); }
 	.umg-card-title { color: #6b7280; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
 	.umg-card-value { font-size: 30px; font-weight: 800; color: var(--umg-ink); line-height: 1; }
-	.umg-card-link { position: absolute; inset: 0; }
 
 	.umg-panel {
 		background: #fff; border: 1px solid #e7e9f2; border-radius: 10px; padding: 18px 20px 20px 20px;
@@ -141,13 +135,8 @@ $pending_count = count($pending_queue);
 		display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
 		border-radius: 7px; font-size: 13px; background: linear-gradient(135deg, rgba(79,95,237,0.14), rgba(47,125,209,0.14)); color: var(--umg-indigo);
 	}
-	.umg-panel h2 .umg-count-pill {
-		display: inline-block; background: linear-gradient(90deg, var(--umg-indigo), var(--umg-blue)); color: #fff;
-		font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 10px; margin-left: 4px; vertical-align: middle;
-		box-shadow: 0 2px 6px rgba(79,95,237,0.35);
-	}
 
-	/* Compact Pending Approvals list — reused both nowhere else but the modal now */
+	/* Compact Pending Approvals list (used inside the Pending Approvals modal) */
 	.umg-approval-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px dashed #ecd9a8; flex-wrap: wrap; }
 	.umg-approval-item:last-child { border-bottom: none; }
 	.umg-approval-meta { flex: 1; min-width: 220px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12.5px; line-height: 1.5; }
@@ -199,18 +188,30 @@ $pending_count = count($pending_queue);
 	.umg-results-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 	.umg-results-header span.umg-match-count { color: #6b7280; font-size: 12px; font-weight: 600; }
 	.umg-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+
 	.umg-modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(30,20,60,0.45); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(1px); }
 	.umg-modal-backdrop.umg-open { display: flex; animation: umg-fade-in .12s ease; }
 	@keyframes umg-fade-in { from { opacity: 0; } to { opacity: 1; } }
 	.umg-modal {
 		background: #fff; border-radius: 12px; padding: 22px; width: 440px; max-width: 90vw;
-		box-shadow: 0 20px 55px rgba(31,20,70,0.30); animation: umg-pop-in .14s ease; border-top: 5px solid var(--umg-indigo);
-		position: relative;
+		box-shadow: 0 20px 55px rgba(31,20,70,0.30); animation: umg-pop-in .14s ease; position: relative; overflow: hidden;
 	}
 	.umg-modal-wide { width: 560px; }
 	.umg-modal-xwide { width: 760px; }
 	@keyframes umg-pop-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-	.umg-modal h3 { margin: 0 0 12px 0; font-size: 16px; color: var(--umg-ink); }
+
+	/* NEW: single shared header bar for every modal (Disable/Flag, Approve, Reject,
+	   Audit Log, Pending Approvals, Change Details, Settings) — same gradient,
+	   same layout, name-only title (no counts) + a consistent close (×). */
+	.umg-modal-header {
+		display: flex; justify-content: space-between; align-items: center; gap: 10px;
+		background: var(--umg-modal-header-bg); margin: -22px -22px 16px -22px;
+		padding: 16px 22px; border-radius: 12px 12px 0 0;
+	}
+	.umg-modal-header h3 { color: #fff; margin: 0; display: flex; align-items: center; gap: 10px; font-size: 16px; }
+	.umg-modal-header .umg-modal-close-x { position: static; color: #fff; font-size: 20px; }
+	.umg-modal-header .umg-modal-close-x:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
 	.umg-modal label { font-size: 12px; font-weight: 700; color: #4b5563; }
 	.umg-modal textarea, .umg-modal input[type=text], .umg-modal input[type=date] {
 		width: 100%; box-sizing: border-box; margin-top: 6px; margin-bottom: 14px; padding: 9px;
@@ -218,12 +219,11 @@ $pending_count = count($pending_queue);
 	}
 	.umg-modal textarea:focus, .umg-modal input:focus { outline: none; border-color: var(--umg-blue); box-shadow: 0 0 0 3px rgba(47,125,209,0.14); }
 	.umg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.umg-modal-subtitle { font-size: 12px; color: #8a94a3; margin: -6px 0 16px 0; }
+	.umg-modal-subtitle { font-size: 12px; color: #8a94a3; margin: 0 0 16px 0; }
 	.umg-modal-close-x {
-		position: absolute; top: 14px; right: 16px; background: none; border: none; cursor: pointer;
-		font-size: 18px; color: #9aa3b2; line-height: 1; padding: 2px 4px; border-radius: 4px;
+		background: none; border: none; cursor: pointer;
+		font-size: 18px; color: #9aa3b2; line-height: 1; padding: 2px 6px; border-radius: 4px;
 	}
-	.umg-modal-close-x:hover { color: #4b5563; background: #f0f2f5; }
 	.umg-row-hidden { display: none !important; }
 
 	button.umg-btn {
@@ -244,14 +244,7 @@ $pending_count = count($pending_queue);
 	.umg-empty-state { text-align: center; padding: 34px 10px; color: #8a94a3; font-size: 13px; }
 	.umg-empty-state .umg-empty-icon { font-size: 30px; display: block; margin-bottom: 8px; opacity: .55; }
 
-	/* Audit Log: header bar + filter row + structured table */
-	.umg-audit-header {
-		display: flex; justify-content: space-between; align-items: center; gap: 10px;
-		background: linear-gradient(120deg, #1c3d63 0%, var(--umg-blue) 100%); margin: -22px -22px 16px -22px;
-		padding: 16px 22px; border-radius: 12px 12px 0 0;
-	}
-	.umg-audit-header h3 { color: #fff; margin: 0; display: flex; align-items: center; gap: 10px; font-size: 17px; }
-	.umg-audit-header .umg-count-pill { background: rgba(255,255,255,0.25); box-shadow: none; }
+	/* Audit Log filter row + structured table */
 	.umg-audit-filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 	.umg-audit-filter-row input, .umg-audit-filter-row select {
 		height: 32px; border: 1.5px solid #dde1ea; border-radius: 20px; padding: 0 12px; font-size: 12.5px; background: #fbfcfe;
@@ -272,15 +265,6 @@ $pending_count = count($pending_queue);
 	.umg-audit-target { color: #374151; }
 	.umg-audit-comment { color: #4b5563; max-width: 260px; }
 	.umg-audit-empty-row td { text-align: center; color: #8a94a3; padding: 24px; }
-
-	/* Pending Approvals modal header bar (amber, matches the card's accent) */
-	.umg-pending-header {
-		display: flex; justify-content: space-between; align-items: center; gap: 10px;
-		background: linear-gradient(120deg, #a5720f 0%, var(--umg-amber) 100%); margin: -22px -22px 16px -22px;
-		padding: 16px 22px; border-radius: 12px 12px 0 0;
-	}
-	.umg-pending-header h3 { color: #fff; margin: 0; display: flex; align-items: center; gap: 10px; font-size: 17px; }
-	.umg-pending-header .umg-count-pill { background: rgba(255,255,255,0.28); box-shadow: none; }
 
 	/* Chip-based "search & select" multiselect (Approvers picker) */
 	.umg-ms { position: relative; }
@@ -341,7 +325,6 @@ $pending_count = count($pending_queue);
 		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['recommended_disable']) ?></div>
 	</div>
-	<!-- NEW: Pending Approvals count card, clicking it opens the same modal as the header button -->
 	<div class="umg-card umg-accent-purple" id="umg-pending-card" style="cursor:pointer;" title="<?= _('View pending approvals') ?>">
 		<div class="umg-card-header">
 			<span class="umg-card-icon">&#9203;</span>
@@ -520,11 +503,13 @@ $pending_count = count($pending_queue);
 	</div>
 </div>
 
-<!-- Disable / Flag modal — also reused by the toolbar "Flag Selected for Approval" button so
-     users always get a chance to add a comment before flagging. -->
+<!-- Disable / Flag modal — also reused by the toolbar "Flag Selected for Approval" button. -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
-	<div class="umg-modal" style="border-top-color: var(--umg-red-dark);">
-		<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-modal-close-x">&times;</button>
+		</div>
 		<div class="umg-card-title" id="umg-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
 		<label><?= _('Request No. / Comment (required to disable immediately, optional to flag)') ?></label>
 		<textarea rows="3" id="umg-modal-comment"></textarea>
@@ -538,8 +523,11 @@ $pending_count = count($pending_queue);
 
 <!-- Approve modal -->
 <div class="umg-modal-backdrop" id="umg-approve-modal-backdrop">
-	<div class="umg-modal" style="border-top-color: var(--umg-green);">
-		<h3>&#9989; <?= _('Approve & Disable') ?></h3>
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#9989; <?= _('Approve & Disable') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-approve-close-x">&times;</button>
+		</div>
 		<div class="umg-card-title" id="umg-approve-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
 		<label><?= _('Approval Comment (optional, added to the requester\'s comment)') ?></label>
 		<textarea rows="3" id="umg-approve-comment"></textarea>
@@ -552,8 +540,11 @@ $pending_count = count($pending_queue);
 
 <!-- Reject modal -->
 <div class="umg-modal-backdrop" id="umg-reject-modal-backdrop">
-	<div class="umg-modal" style="border-top-color: var(--umg-amber);">
-		<h3>&#10060; <?= _('Reject Request') ?></h3>
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#10060; <?= _('Reject Request') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-reject-close-x">&times;</button>
+		</div>
 		<label><?= _('Reason (optional)') ?></label>
 		<textarea rows="3" id="umg-reject-comment"></textarea>
 		<div class="umg-modal-actions">
@@ -563,13 +554,12 @@ $pending_count = count($pending_queue);
 	</div>
 </div>
 
-<!-- NEW: Pending Approvals modal — opened via the header button (with count badge)
-     or the new summary card. Closes on Esc / × like every other modal. -->
+<!-- Pending Approvals modal — opened via the header button or the summary card. -->
 <div class="umg-modal-backdrop" id="umg-pending-modal-backdrop">
 	<div class="umg-modal umg-modal-xwide">
-		<div class="umg-pending-header">
-			<h3>&#9203; <?= _('Pending Approvals') ?> <span class="umg-count-pill"><?= umg_esc($pending_count) ?></span></h3>
-			<button type="button" class="umg-modal-close-x" id="umg-pending-modal-close" style="position:static;color:#fff;font-size:20px;">&times;</button>
+		<div class="umg-modal-header">
+			<h3>&#9203; <?= _('Pending Approvals') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-pending-modal-close">&times;</button>
 		</div>
 
 		<?php if ($pending_queue): ?>
@@ -608,12 +598,12 @@ $pending_count = count($pending_queue);
 </div>
 
 <!-- Audit Log modal: structured table (Time / Actor / Action / Target User / Comment)
-     with a "Details" button for long comments, closes on Esc or the × in the corner. -->
+     with a "Details" button for long comments, closes on Esc or the × in the header. -->
 <div class="umg-modal-backdrop" id="umg-audit-modal-backdrop">
 	<div class="umg-modal umg-modal-xwide">
-		<div class="umg-audit-header">
-			<h3>&#128337; <?= _('Audit Log') ?> <span class="umg-count-pill"><?= count($activity_log) ?></span></h3>
-			<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close" style="position:static;color:#fff;font-size:20px;">&times;</button>
+		<div class="umg-modal-header">
+			<h3>&#128337; <?= _('Audit Log') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">&times;</button>
 		</div>
 
 		<?php if ($activity_log): ?>
@@ -689,9 +679,11 @@ $pending_count = count($pending_queue);
 
 <!-- Audit Log "Change Details" popup — reused for any truncated comment, closes on Esc. -->
 <div class="umg-modal-backdrop" id="umg-log-details-modal-backdrop">
-	<div class="umg-modal" style="border-top-color: var(--umg-indigo);">
-		<button type="button" class="umg-modal-close-x" id="umg-log-details-close-x">&times;</button>
-		<h3>&#128203; <?= _('Change Details') ?></h3>
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#128203; <?= _('Change Details') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-log-details-close-x">&times;</button>
+		</div>
 		<div class="umg-card-title" id="umg-log-details-meta" style="text-transform:none;margin-bottom:10px;font-weight:600;color:#6b7280;"></div>
 		<div id="umg-log-details-text" style="white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px 12px;font-size:13px;color:#374151;"></div>
 		<div class="umg-modal-actions" style="margin-top:16px;">
@@ -700,11 +692,13 @@ $pending_count = count($pending_queue);
 	</div>
 </div>
 
-<!-- Settings modal — houses the full "Inactivity Policy (configurable)" panel,
-     opened via the header "Settings" button, closes on Esc like every other modal. -->
+<!-- Settings modal — houses the full "Inactivity Policy (configurable)" panel. -->
 <div class="umg-modal-backdrop" id="umg-settings-modal-backdrop">
-	<div class="umg-modal umg-modal-wide" style="border-top-color: var(--umg-indigo);">
-		<h3>&#9881; <?= _('Inactivity Policy Settings') ?></h3>
+	<div class="umg-modal umg-modal-wide">
+		<div class="umg-modal-header">
+			<h3>&#9881; <?= _('Inactivity Policy Settings') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-settings-close-x">&times;</button>
+		</div>
 		<div class="umg-modal-subtitle"><?= _('Controls which accounts are recommended for disabling, and who may approve disable requests.') ?></div>
 
 		<div class="umg-filter-row">
@@ -805,7 +799,7 @@ $pending_count = count($pending_queue);
 	}
 
 	// ---- Generic modal open/close + a single Esc handler that closes ----
-	// ---- whichever modal (incl. Audit Log / Pending Approvals / Settings / Details). ----
+	// ---- whichever modal is active. ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
 
@@ -835,6 +829,7 @@ $pending_count = count($pending_queue);
 		pendingUserIds = [];
 	}
 	document.getElementById('umg-modal-cancel').addEventListener('click', closeModal);
+	document.getElementById('umg-modal-close-x').addEventListener('click', closeModal);
 
 	document.getElementById('umg-disable-selected').addEventListener('click', function() {
 		var ids = getSelectedUserIds();
@@ -896,6 +891,7 @@ $pending_count = count($pending_queue);
 		});
 	});
 	document.getElementById('umg-approve-cancel').addEventListener('click', function() { closeBackdrop(approveBackdrop); });
+	document.getElementById('umg-approve-close-x').addEventListener('click', function() { closeBackdrop(approveBackdrop); });
 	document.getElementById('umg-approve-confirm').addEventListener('click', function() {
 		submitAction({ mode: 'approve', queue_index: approveIndex, comment: approveComment.value.trim() });
 		closeBackdrop(approveBackdrop);
@@ -914,13 +910,13 @@ $pending_count = count($pending_queue);
 		});
 	});
 	document.getElementById('umg-reject-cancel').addEventListener('click', function() { closeBackdrop(rejectBackdrop); });
+	document.getElementById('umg-reject-close-x').addEventListener('click', function() { closeBackdrop(rejectBackdrop); });
 	document.getElementById('umg-reject-confirm').addEventListener('click', function() {
 		submitAction({ mode: 'reject', queue_index: rejectIndex, comment: rejectComment.value.trim() });
 		closeBackdrop(rejectBackdrop);
 	});
 
-	// NEW: Pending Approvals modal wiring — opened from the header button OR the
-	// new summary card.
+	// Pending Approvals modal wiring — opened from the header button OR the summary card.
 	var pendingBackdrop = document.getElementById('umg-pending-modal-backdrop');
 	document.getElementById('umg-pending-btn').addEventListener('click', function() {
 		openBackdrop(pendingBackdrop);
@@ -1001,6 +997,9 @@ $pending_count = count($pending_queue);
 		openBackdrop(settingsBackdrop);
 	});
 	document.getElementById('umg-settings-close').addEventListener('click', function() {
+		closeBackdrop(settingsBackdrop);
+	});
+	document.getElementById('umg-settings-close-x').addEventListener('click', function() {
 		closeBackdrop(settingsBackdrop);
 	});
 
