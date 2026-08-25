@@ -27,12 +27,21 @@ $action_classes = [
 
 // Approvers configured today (usernames), used to pre-seed the chip picker below.
 $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : [];
+
+// Threshold above which the Audit Log's Comment column truncates and shows a
+// "Details" button that opens the full text in a secondary popup.
+define('UMG_LOG_COMMENT_TRUNCATE', 60);
 ?>
 
 <div class="umg-page-header">
 	<div class="umg-page-header-title">
 		<span class="umg-page-header-icon">&#128101;</span>
-		<h1><?= umg_esc($data['title']) ?></h1>
+		<div>
+			<h1><?= umg_esc($data['title']) ?></h1>
+			<div class="umg-page-header-desc">
+				<?= _('Reviews Zabbix user accounts against a configurable inactivity policy, lets Super Admins flag or disable stale/never-logged-in users, and routes disable requests through an approval workflow with a full audit trail.') ?>
+			</div>
+		</div>
 	</div>
 	<div class="umg-page-header-actions">
 		<button type="button" class="umg-btn umg-btn-header" id="umg-audit-log-btn">
@@ -62,15 +71,16 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	}
 
 	.umg-page-header {
-		display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+		display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;
 		background: linear-gradient(120deg, var(--umg-indigo) 0%, var(--umg-purple) 55%, var(--umg-blue) 100%);
 		border-radius: 10px; padding: 18px 22px; margin-bottom: 20px;
 		box-shadow: 0 8px 22px rgba(79,95,237,0.25);
 	}
-	.umg-page-header-title { display: flex; align-items: center; gap: 12px; }
-	.umg-page-header-icon { font-size: 26px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); }
+	.umg-page-header-title { display: flex; align-items: flex-start; gap: 12px; }
+	.umg-page-header-icon { font-size: 26px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); margin-top: 2px; }
 	.umg-page-header h1 { color: #fff; margin: 0; font-weight: 700; letter-spacing: .01em; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.umg-page-header-desc { color: rgba(255,255,255,0.88); font-size: 12.5px; margin-top: 5px; max-width: 620px; line-height: 1.5; }
+	.umg-page-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
 	.umg-btn-header { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); color: #fff; font-weight: 700; backdrop-filter: blur(2px); }
 	.umg-btn-header:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
 
@@ -96,15 +106,16 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	.umg-card.umg-accent-warning::before { background: linear-gradient(90deg, var(--umg-amber), #ffd166); }
 	.umg-card.umg-accent-warning::after { background: radial-gradient(circle, rgba(224,167,33,0.14), transparent 70%); }
 	.umg-card.umg-accent-ok::before { background: linear-gradient(90deg, var(--umg-green), #7be0a8); }
+	.umg-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 	.umg-card-icon {
-		display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
-		border-radius: 9px; font-size: 16px; margin-bottom: 10px;
+		display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;
+		border-radius: 8px; font-size: 14px;
 		background: linear-gradient(135deg, rgba(47,125,209,0.15), rgba(23,162,184,0.15)); color: var(--umg-blue);
 	}
 	.umg-card.umg-accent-danger .umg-card-icon { background: linear-gradient(135deg, rgba(224,82,96,0.16), rgba(255,138,128,0.16)); color: var(--umg-red-dark); }
 	.umg-card.umg-accent-warning .umg-card-icon { background: linear-gradient(135deg, rgba(224,167,33,0.18), rgba(255,209,102,0.18)); color: #8a6200; }
 	.umg-card.umg-accent-ok .umg-card-icon { background: linear-gradient(135deg, rgba(34,160,107,0.16), rgba(123,224,168,0.16)); color: var(--umg-green); }
-	.umg-card-title { color: #6b7280; font-size: 11.5px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+	.umg-card-title { color: #6b7280; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
 	.umg-card-value { font-size: 30px; font-weight: 800; color: var(--umg-ink); line-height: 1; }
 
 	.umg-panel {
@@ -165,18 +176,25 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	.umg-modal {
 		background: #fff; border-radius: 12px; padding: 22px; width: 440px; max-width: 90vw;
 		box-shadow: 0 20px 55px rgba(31,20,70,0.30); animation: umg-pop-in .14s ease; border-top: 5px solid var(--umg-indigo);
+		position: relative;
 	}
 	.umg-modal-wide { width: 560px; }
+	.umg-modal-xwide { width: 760px; }
 	@keyframes umg-pop-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 	.umg-modal h3 { margin: 0 0 12px 0; font-size: 16px; color: var(--umg-ink); }
 	.umg-modal label { font-size: 12px; font-weight: 700; color: #4b5563; }
-	.umg-modal textarea, .umg-modal input[type=text] {
+	.umg-modal textarea, .umg-modal input[type=text], .umg-modal input[type=date] {
 		width: 100%; box-sizing: border-box; margin-top: 6px; margin-bottom: 14px; padding: 9px;
 		border: 1.5px solid #dde1ea; border-radius: 6px; font-size: 13px; background: #fbfcfe;
 	}
-	.umg-modal textarea:focus, .umg-modal input[type=text]:focus { outline: none; border-color: var(--umg-blue); box-shadow: 0 0 0 3px rgba(47,125,209,0.14); }
+	.umg-modal textarea:focus, .umg-modal input:focus { outline: none; border-color: var(--umg-blue); box-shadow: 0 0 0 3px rgba(47,125,209,0.14); }
 	.umg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 	.umg-modal-subtitle { font-size: 12px; color: #8a94a3; margin: -6px 0 16px 0; }
+	.umg-modal-close-x {
+		position: absolute; top: 14px; right: 16px; background: none; border: none; cursor: pointer;
+		font-size: 18px; color: #9aa3b2; line-height: 1; padding: 2px 4px; border-radius: 4px;
+	}
+	.umg-modal-close-x:hover { color: #4b5563; background: #f0f2f5; }
 	.umg-row-hidden { display: none !important; }
 
 	button.umg-btn {
@@ -204,6 +222,35 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	.umg-approval-comment { font-size: 12px; color: #4b5563; margin-top: 4px; background: #fdf6e3; border: 1px solid #f2e2ae; border-radius: 6px; padding: 6px 10px; }
 	.umg-approval-flagged { font-size: 11px; color: #8a94a3; margin-top: 4px; }
 	.umg-approval-actions { display: flex; gap: 8px; align-items: center; }
+
+	/* ---- Audit Log: header bar + filter row + structured table ---- */
+	.umg-audit-header {
+		display: flex; justify-content: space-between; align-items: center; gap: 10px;
+		background: linear-gradient(120deg, #1c3d63 0%, var(--umg-blue) 100%); margin: -22px -22px 16px -22px;
+		padding: 16px 22px; border-radius: 12px 12px 0 0;
+	}
+	.umg-audit-header h3 { color: #fff; margin: 0; display: flex; align-items: center; gap: 10px; font-size: 17px; }
+	.umg-audit-header .umg-count-pill { background: rgba(255,255,255,0.25); box-shadow: none; }
+	.umg-audit-filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+	.umg-audit-filter-row input, .umg-audit-filter-row select {
+		height: 32px; border: 1.5px solid #dde1ea; border-radius: 20px; padding: 0 12px; font-size: 12.5px; background: #fbfcfe;
+	}
+	.umg-audit-filter-row input:focus, .umg-audit-filter-row select:focus { outline: none; border-color: var(--umg-blue); box-shadow: 0 0 0 3px rgba(47,125,209,0.14); }
+	.umg-audit-search { min-width: 200px; flex: 1; }
+	.umg-audit-table-wrap { max-height: 55vh; overflow: auto; border: 1px solid #eef0f2; border-radius: 8px; }
+	.umg-audit-table { width: 100%; border-collapse: collapse; }
+	.umg-audit-table th {
+		position: sticky; top: 0; background: #f6f7fb; text-align: left; padding: 9px 12px; font-size: 10.5px;
+		text-transform: uppercase; letter-spacing: .04em; color: #6b7280; border-bottom: 2px solid #e7e9f2; white-space: nowrap;
+	}
+	.umg-audit-table td { padding: 10px 12px; border-bottom: 1px solid #eef0f2; font-size: 12.5px; vertical-align: top; }
+	.umg-audit-table tbody tr:hover { background: #f7faff; }
+	.umg-audit-time { color: #6b7280; white-space: nowrap; font-size: 12px; }
+	.umg-audit-actor { font-weight: 700; color: var(--umg-ink); }
+	.umg-audit-actor-sub { color: #8a94a3; font-size: 11px; }
+	.umg-audit-target { color: #374151; }
+	.umg-audit-comment { color: #4b5563; max-width: 260px; }
+	.umg-audit-empty-row td { text-align: center; color: #8a94a3; padding: 24px; }
 
 	.umg-log-wrap { max-height: 260px; overflow-y: auto; border: 1px solid #eef0f2; border-radius: 8px; }
 	.umg-log-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #eef0f2; position: relative; }
@@ -246,23 +293,31 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 
 <div class="umg-cards">
 	<div class="umg-card">
-		<div class="umg-card-icon">&#128101;</div>
-		<div class="umg-card-title"><?= _('Total Users') ?></div>
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#128101;</span>
+			<span class="umg-card-title"><?= _('Total Users') ?></span>
+		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['total']) ?></div>
 	</div>
 	<div class="umg-card umg-accent-danger">
-		<div class="umg-card-icon">&#128683;</div>
-		<div class="umg-card-title"><?= _('Never Logged In') ?></div>
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#128683;</span>
+			<span class="umg-card-title"><?= _('Never Logged In') ?></span>
+		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['never_logged_in']) ?></div>
 	</div>
 	<div class="umg-card umg-accent-danger">
-		<div class="umg-card-icon">&#9203;</div>
-		<div class="umg-card-title"><?= _('Inactive Over Threshold') ?></div>
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9203;</span>
+			<span class="umg-card-title"><?= _('Inactive Over Threshold') ?></span>
+		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['inactive_over_threshold']) ?></div>
 	</div>
 	<div class="umg-card umg-accent-warning">
-		<div class="umg-card-icon">&#9888;</div>
-		<div class="umg-card-title"><?= _('Recommended Disable') ?></div>
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9888;</span>
+			<span class="umg-card-title"><?= _('Recommended Disable') ?></span>
+		</div>
 		<div class="umg-card-value"><?= umg_esc($summary['recommended_disable']) ?></div>
 	</div>
 </div>
@@ -492,40 +547,100 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	</div>
 </div>
 
-<!-- Audit Log modal (opened via the header "Audit Log" button, closes on Esc) -->
+<!-- Audit Log modal: structured table (Time / Actor / Action / Target User / Comment)
+     with a "Details" button for long comments, closes on Esc or the × in the corner. -->
 <div class="umg-modal-backdrop" id="umg-audit-modal-backdrop">
-	<div class="umg-modal umg-modal-wide" style="width:640px;border-top-color: var(--umg-indigo);">
-		<h3>&#128337; <?= _('Activity Log') ?> <span class="umg-count-pill"><?= count($activity_log) ?></span></h3>
+	<div class="umg-modal umg-modal-xwide">
+		<div class="umg-audit-header">
+			<h3>&#128337; <?= _('Audit Log') ?> <span class="umg-count-pill"><?= count($activity_log) ?></span></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close" style="position:static;color:#fff;font-size:20px;">&times;</button>
+		</div>
+
 		<?php if ($activity_log): ?>
-		<div class="umg-log-wrap" style="max-height:60vh;">
-			<?php foreach ($activity_log as $entry): ?>
-				<?php
-				$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
-				$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
-				?>
-				<div class="umg-log-item">
-					<div class="umg-log-meta">
-						<span class="umg-badge <?= $badge_class ?>"><?= umg_esc($badge_label) ?></span>
-						<strong><?= umg_esc($entry['username']) ?></strong> (<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)
-						<?php if (!empty($entry['comment'])): ?>
-						<div class="umg-log-comment"><?= umg_esc($entry['comment']) ?></div>
-						<?php endif; ?>
-						<div class="umg-log-actor"><?= _('By') ?> <?= umg_esc($entry['actor']) ?></div>
-					</div>
-					<div class="umg-log-time"><?= !empty($entry['clock']) ? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])) : '' ?></div>
-				</div>
-			<?php endforeach; ?>
+		<div class="umg-audit-filter-row">
+			<input type="text" id="umg-audit-search" class="umg-audit-search" placeholder="<?= _('Search actor / user / comment...') ?>">
+			<select id="umg-audit-action-filter">
+				<option value=""><?= _('All Actions') ?></option>
+				<?php foreach ($action_labels as $key => $label): ?>
+				<option value="<?= umg_esc($key) ?>"><?= umg_esc($label) ?></option>
+				<?php endforeach; ?>
+			</select>
+			<input type="date" id="umg-audit-from-date" title="<?= _('From date') ?>">
+			<input type="date" id="umg-audit-to-date" title="<?= _('To date') ?>">
+			<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-clear">&times; <?= _('Clear') ?></button>
+		</div>
+
+		<div class="umg-audit-table-wrap">
+			<table class="umg-audit-table" id="umg-audit-table">
+				<thead>
+					<tr>
+						<th><?= _('Time') ?></th>
+						<th><?= _('Actor') ?></th>
+						<th><?= _('Action') ?></th>
+						<th><?= _('Target User') ?></th>
+						<th><?= _('Comment') ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ($activity_log as $entry): ?>
+						<?php
+						$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
+						$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
+						$comment_full = trim((string) ($entry['comment'] ?? ''));
+						$is_long = mb_strlen($comment_full) > UMG_LOG_COMMENT_TRUNCATE;
+						$comment_short = $is_long ? (mb_substr($comment_full, 0, UMG_LOG_COMMENT_TRUNCATE) . '…') : $comment_full;
+						$search_blob = mb_strtolower(($entry['actor'] ?? '') . ' ' . ($entry['username'] ?? '') . ' ' . $comment_full);
+						?>
+						<tr data-action="<?= umg_esc($entry['action'] ?? '') ?>" data-clock="<?= umg_esc($entry['clock'] ?? 0) ?>" data-search="<?= umg_esc($search_blob) ?>">
+							<td class="umg-audit-time"><?= !empty($entry['clock']) ? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])) : '-' ?></td>
+							<td>
+								<div class="umg-audit-actor"><?= umg_esc($entry['actor'] ?? '-') ?></div>
+							</td>
+							<td><span class="umg-badge <?= $badge_class ?>"><?= umg_esc($badge_label) ?></span></td>
+							<td class="umg-audit-target">
+								<?= umg_esc($entry['username'] ?? '-') ?>
+								<div class="umg-audit-actor-sub"><?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?></div>
+							</td>
+							<td class="umg-audit-comment">
+								<?php if ($comment_full === ''): ?>
+									-
+								<?php else: ?>
+									<?= umg_esc($comment_short) ?>
+									<?php if ($is_long): ?>
+									<br>
+									<button type="button" class="umg-btn umg-btn-sm umg-audit-details-btn" style="margin-top:4px;"
+										data-full="<?= umg_esc($comment_full) ?>"
+										data-meta="<?= umg_esc((!empty($entry['clock']) ? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock']) : '-') . ' · ' . ($entry['actor'] ?? '-') . ' · ' . $badge_label . ' · ' . ($entry['username'] ?? '-')) ?>">
+										<?= _('Details') ?>
+									</button>
+									<?php endif; ?>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
 		</div>
 		<?php else: ?>
 		<div class="umg-empty-state"><span class="umg-empty-icon">&#128203;</span><?= _('No activity recorded yet.') ?></div>
 		<?php endif; ?>
+	</div>
+</div>
+
+<!-- Audit Log "Change Details" popup — reused for any truncated comment, closes on Esc. -->
+<div class="umg-modal-backdrop" id="umg-log-details-modal-backdrop">
+	<div class="umg-modal" style="border-top-color: var(--umg-indigo);">
+		<button type="button" class="umg-modal-close-x" id="umg-log-details-close-x">&times;</button>
+		<h3>&#128203; <?= _('Change Details') ?></h3>
+		<div class="umg-card-title" id="umg-log-details-meta" style="text-transform:none;margin-bottom:10px;font-weight:600;color:#6b7280;"></div>
+		<div class="umg-approval-comment" id="umg-log-details-text" style="white-space:pre-wrap;"></div>
 		<div class="umg-modal-actions" style="margin-top:16px;">
-			<button type="button" class="umg-btn" id="umg-audit-modal-close"><?= _('Close') ?></button>
+			<button type="button" class="umg-btn" id="umg-log-details-close"><?= _('Close') ?></button>
 		</div>
 	</div>
 </div>
 
-<!-- NEW: Settings modal — houses the full "Inactivity Policy (configurable)" panel,
+<!-- Settings modal — houses the full "Inactivity Policy (configurable)" panel,
      opened via the header "Settings" button, closes on Esc like every other modal. -->
 <div class="umg-modal-backdrop" id="umg-settings-modal-backdrop">
 	<div class="umg-modal umg-modal-wide" style="border-top-color: var(--umg-indigo);">
@@ -630,7 +745,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 	}
 
 	// ---- Generic modal open/close + a single Esc handler that closes ----
-	// ---- whichever modal (incl. Audit Log / Settings) or open dropdown is active. ----
+	// ---- whichever modal (incl. Audit Log / Settings / Details) or open dropdown is active. ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
 
@@ -743,7 +858,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		closeBackdrop(rejectBackdrop);
 	});
 
-	// Audit Log modal wiring
+	// Audit Log modal wiring + client-side search/action/date filtering
 	var auditBackdrop = document.getElementById('umg-audit-modal-backdrop');
 	document.getElementById('umg-audit-log-btn').addEventListener('click', function() {
 		openBackdrop(auditBackdrop);
@@ -752,7 +867,60 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 		closeBackdrop(auditBackdrop);
 	});
 
-	// NEW: Settings modal wiring
+	var auditTable = document.getElementById('umg-audit-table');
+	if (auditTable) {
+		var auditRows = Array.prototype.slice.call(auditTable.querySelectorAll('tbody tr'));
+		var auditSearch = document.getElementById('umg-audit-search');
+		var auditActionFilter = document.getElementById('umg-audit-action-filter');
+		var auditFromDate = document.getElementById('umg-audit-from-date');
+		var auditToDate = document.getElementById('umg-audit-to-date');
+
+		function applyAuditFilters() {
+			var q = auditSearch.value.trim().toLowerCase();
+			var action = auditActionFilter.value;
+			var fromTs = auditFromDate.value ? new Date(auditFromDate.value + 'T00:00:00').getTime() / 1000 : null;
+			var toTs = auditToDate.value ? new Date(auditToDate.value + 'T23:59:59').getTime() / 1000 : null;
+
+			auditRows.forEach(function(row) {
+				var matches = true;
+				if (q && row.getAttribute('data-search').indexOf(q) === -1) matches = false;
+				if (action && row.getAttribute('data-action') !== action) matches = false;
+				var clock = parseInt(row.getAttribute('data-clock'), 10) || 0;
+				if (fromTs !== null && clock < fromTs) matches = false;
+				if (toTs !== null && clock > toTs) matches = false;
+				row.classList.toggle('umg-row-hidden', !matches);
+			});
+		}
+
+		auditSearch.addEventListener('input', applyAuditFilters);
+		auditActionFilter.addEventListener('change', applyAuditFilters);
+		auditFromDate.addEventListener('change', applyAuditFilters);
+		auditToDate.addEventListener('change', applyAuditFilters);
+		document.getElementById('umg-audit-clear').addEventListener('click', function() {
+			auditSearch.value = '';
+			auditActionFilter.value = '';
+			auditFromDate.value = '';
+			auditToDate.value = '';
+			applyAuditFilters();
+		});
+	}
+
+	// Audit Log "Details" popup for long comments
+	var logDetailsBackdrop = document.getElementById('umg-log-details-modal-backdrop');
+	var logDetailsMeta = document.getElementById('umg-log-details-meta');
+	var logDetailsText = document.getElementById('umg-log-details-text');
+
+	document.querySelectorAll('.umg-audit-details-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			logDetailsMeta.textContent = btn.getAttribute('data-meta') || '';
+			logDetailsText.textContent = btn.getAttribute('data-full') || '';
+			openBackdrop(logDetailsBackdrop);
+		});
+	});
+	document.getElementById('umg-log-details-close').addEventListener('click', function() { closeBackdrop(logDetailsBackdrop); });
+	document.getElementById('umg-log-details-close-x').addEventListener('click', function() { closeBackdrop(logDetailsBackdrop); });
+
+	// Settings modal wiring
 	var settingsBackdrop = document.getElementById('umg-settings-modal-backdrop');
 	document.getElementById('umg-settings-btn').addEventListener('click', function() {
 		openBackdrop(settingsBackdrop);
@@ -877,14 +1045,24 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 			.catch(function() { alert('<?= _('Request failed.') ?>'); });
 	});
 
-	// CSV export of currently-visible rows, including disablement comment
-	// (button now lives in the page header, order: Audit Log, Export CSV, Settings)
+	// CSV export of currently-visible rows, including disablement comment.
+	// NEW: any placeholder dash ("—", "-", empty) is normalized to a plain
+	// ASCII hyphen so it survives Excel's default (non-UTF8) CSV import
+	// instead of rendering as "â€"" mojibake.
+	function csvSafe(text) {
+		text = String(text == null ? '' : text).trim();
+		if (text === '' || text === '\u2014' || text === '\u2013' || text === '-') {
+			return '-';
+		}
+		return text;
+	}
+
 	document.getElementById('umg-export-csv').addEventListener('click', function() {
 		var header = ['Username', 'User ID', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
 		var lines = [header.join(',')];
 
 		function csvField(text) {
-			text = String(text == null ? '' : text);
+			text = csvSafe(text);
 			if (/,|"|\n/.test(text)) {
 				text = '"' + text.replace(/"/g, '""') + '"';
 			}
@@ -904,7 +1082,7 @@ $configured_approvers = is_array($config['approvers']) ? $config['approvers'] : 
 			lines.push(fields.map(csvField).join(','));
 		});
 
-		var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+		var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
 		var url = URL.createObjectURL(blob);
 		var a = document.createElement('a');
 		a.href = url;
