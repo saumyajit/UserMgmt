@@ -106,7 +106,8 @@ class UserPolicy extends CController {
 	protected function doAction(): void {
 		$config = self::loadConfig();
 		$now = time();
-
+	}
+	
 	protected function doAction(): void {
 
 		$current_time = time();
