@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "usermgmt",
     "name": "User Management in Zabbix",
-    "version": "1.1",
+    "version": "1.1.4",
     "author": "Saumyajit Pramanik",
     "namespace": "UserMgmt",
     "url": "https://www.zabbix.com/",
