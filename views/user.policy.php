@@ -1157,6 +1157,13 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-card-value"><?= umg_esc($pending_count) ?></div>
 	</div>
+	<div class="umg-card umg-accent-ok" id="umg-ready-disable-card" style="cursor:pointer;" title="<?= _('View users ready to disable') ?>">
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9989;</span>
+			<span class="umg-card-title"><?= _('Ready to Disable') ?></span>
+		</div>
+		<div class="umg-card-value"><?= umg_esc(count($approved_queue)) ?></div>
+	</div>
 </div>
 
 <div class="umg-panel">
@@ -1854,6 +1861,10 @@ button.umg-btn-sm {
 	var pendingCard = document.getElementById('umg-pending-card');
 	if (pendingCard) {
 		pendingCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
+	}
+	var readyDisableCard = document.getElementById('umg-ready-disable-card');
+	if (readyDisableCard) {
+		readyDisableCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
 	}
 
 	// Audit Log modal wiring + client-side search/action/date filtering
