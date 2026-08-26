@@ -40,16 +40,20 @@ class UserPolicyExecute extends CController {
 		if (!is_file($file)) {
 			return [];
 		}
+
 		$raw = @file_get_contents($file);
 		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
 		return is_array($decoded) ? $decoded : [];
 	}
 
 	private static function saveJsonFile(string $file, array $data): bool {
 		$dir = dirname($file);
+
 		if (!is_dir($dir)) {
 			@mkdir($dir, 0755, true);
 		}
+
 		return @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT)) !== false;
 	}
 
@@ -62,28 +66,62 @@ class UserPolicyExecute extends CController {
 	}
 
 	/**
-	 * Single append-only trail of every comment/action taken through this module —
-	 * flag, disable, approve, reject — independent of Zabbix's own audit log (which
-	 * has no room for our comments). UserPolicy.php reads this to show the "Comment"
-	 * column and a scrollable Activity Log panel.
+	 * Resolves the current target user identity from the stable Zabbix userid.
+	 *
+	 * This intentionally does not rely on name/surname saved in the approval
+	 * queue because older queue records can contain empty values.
 	 */
-	private static function logActivity(string $action, string $userid, string $username, string $comment, string $actor, array $extra = []): void {
+	private static function getUserIdentity(string $userid): array {
+		$users = API::User()->get([
+			'output' => ['userid', 'username', 'name', 'surname'],
+			'userids' => [$userid]
+		]);
+
+		if (!$users) {
+			return [
+				'userid' => $userid,
+				'username' => '',
+				'name' => '',
+				'surname' => ''
+			];
+		}
+
+		return [
+			'userid' => (string) $users[0]['userid'],
+			'username' => (string) ($users[0]['username'] ?? ''),
+			'name' => (string) ($users[0]['name'] ?? ''),
+			'surname' => (string) ($users[0]['surname'] ?? '')
+		];
+	}
+
+	/**
+	 * Appends one complete activity-log record.
+	 *
+	 * Target identity is supplied by each action call site. Actor identity is
+	 * captured from the currently authenticated Zabbix frontend user.
+	 */
+	private static function logActivity(
+		string $action,
+		string $userid,
+		string $username,
+		string $comment,
+		string $actor,
+		array $extra = []
+	): void {
 		$log = self::loadJsonFile(self::ACTIVITY_LOG_FILE);
+		$actor_data = \CWebUser::$data ?? [];
+
 		$log[] = array_merge([
 			'action' => $action,
 			'userid' => $userid,
 			'username' => $username,
 			'comment' => $comment,
 			'actor' => $actor,
-			// The Audit Log's "Full Name" column shows who performed the
-			// action, not the target user — so this is the acting Super
-			// Admin's own name/surname (from their session), pulled here
-			// once so every call site gets it automatically rather than
-			// having to thread it through each of the 4 logActivity() calls.
-			'actor_name' => \CWebUser::$data['name'] ?? '',
-			'actor_surname' => \CWebUser::$data['surname'] ?? '',
+			'actor_name' => trim((string) ($actor_data['name'] ?? '')),
+			'actor_surname' => trim((string) ($actor_data['surname'] ?? '')),
 			'clock' => time()
 		], $extra);
+
 		self::saveJsonFile(self::ACTIVITY_LOG_FILE, $log);
 	}
 
@@ -93,27 +131,31 @@ class UserPolicyExecute extends CController {
 
 	private static function loadApprovers(): array {
 		$config = self::loadJsonFile(self::CONFIG_FILE);
-		return isset($config['approvers']) && is_array($config['approvers']) ? $config['approvers'] : [];
+
+		return isset($config['approvers']) && is_array($config['approvers'])
+			? $config['approvers']
+			: [];
 	}
 
 	/**
-	 * If an approver allowlist has been configured, only usernames on it may approve
-	 * or reject. An empty list means "any Super Admin" (the original behaviour).
+	 * If an allowlist is configured, only listed Super Admins may approve
+	 * or reject. An empty allowlist means any Super Admin may do so.
 	 */
 	private function enforceApproverPermission(string $actor): void {
 		$approvers = self::loadApprovers();
 
 		if ($approvers && !in_array($actor, $approvers, true)) {
-			$this->respondJson(false, _('You are not on the approver list for this module.'));
+			$this->respondJson(
+				false,
+				_('You are not on the approver list for this module.')
+			);
 		}
 	}
 
 	/**
-	 * Zabbix has no per-user "disabled" flag reachable via user.update. A user is
-	 * disabled when ANY of their user groups has users_status = GROUP_STATUS_DISABLED (1).
-	 * We reuse (or create once) a dedicated group for that, and ADD users to it rather
-	 * than replacing their existing group memberships, so re-enabling later (removing
-	 * them from this one group) doesn't lose their original group/permission setup.
+	 * Zabbix disables a user when any assigned user group has
+	 * users_status = GROUP_STATUS_DISABLED. This module adds users to a
+	 * dedicated disabled group without replacing existing memberships.
 	 */
 	private static function getOrCreateDisabledUsrgrp(): string {
 		$name = 'Disabled by User Mgmt policy';
@@ -136,10 +178,15 @@ class UserPolicyExecute extends CController {
 	}
 
 	/**
-	 * Disables the given users (via group membership, see above) and logs one
-	 * activity entry per user.
+	 * Disables every requested user and writes one complete audit entry
+	 * per target user.
 	 */
-	private static function disableUsers(array $userids, string $comment, string $actor, string $action = 'disable'): void {
+	private static function disableUsers(
+		array $userids,
+		string $comment,
+		string $actor,
+		string $action = 'disable'
+	): void {
 		$disabled_usrgrpid = self::getOrCreateDisabledUsrgrp();
 
 		foreach ($userids as $userid) {
@@ -157,28 +204,41 @@ class UserPolicyExecute extends CController {
 
 			if (!in_array($disabled_usrgrpid, $usrgrpids, true)) {
 				$usrgrpids[] = $disabled_usrgrpid;
+
+				API::User()->update([
+					'userid' => $userid,
+					'usrgrps' => array_map(function ($id) {
+						return ['usrgrpid' => $id];
+					}, $usrgrpids)
+				]);
 			}
 
-			API::User()->update([
-				'userid' => $userid,
-				'usrgrps' => array_map(function ($id) {
-					return ['usrgrpid' => $id];
-				}, $usrgrpids)
-			]);
-
-			self::logActivity($action, (string) $userid, $user[0]['username'], $comment, $actor, [
-				'name' => $user[0]['name'] ?? '',
-				'surname' => $user[0]['surname'] ?? ''
-			]);
+			self::logActivity(
+				$action,
+				(string) $user[0]['userid'],
+				(string) $user[0]['username'],
+				$comment,
+				$actor,
+				[
+					'name' => (string) ($user[0]['name'] ?? ''),
+					'surname' => (string) ($user[0]['surname'] ?? '')
+				]
+			);
 		}
 	}
 
-	private function respondJson(bool $success, string $message, array $extra = []): void {
+	private function respondJson(
+		bool $success,
+		string $message,
+		array $extra = []
+	): void {
 		header('Content-Type: application/json');
+
 		echo json_encode(array_merge([
 			'success' => $success,
 			'message' => $message
 		], $extra));
+
 		session_write_close();
 		exit;
 	}
@@ -198,30 +258,41 @@ class UserPolicyExecute extends CController {
 			$now = time();
 
 			foreach ($userids as $userid) {
-				$user = API::User()->get(['output' => ['username', 'name', 'surname'], 'userids' => [$userid]]);
-				$username = $user ? $user[0]['username'] : '';
-				$name = $user ? ($user[0]['name'] ?? '') : '';
-				$surname = $user ? ($user[0]['surname'] ?? '') : '';
+				$user = self::getUserIdentity((string) $userid);
 
 				$queue[] = [
-					'userid' => (string) $userid,
-					'username' => $username,
-					'name' => $name,
-					'surname' => $surname,
+					'userid' => $user['userid'],
+					'username' => $user['username'],
+					'name' => $user['name'],
+					'surname' => $user['surname'],
 					'status' => 'pending',
 					'comment' => $comment,
 					'flagged_by' => $actor,
 					'flagged_at' => $now
 				];
 
-				self::logActivity('flag', (string) $userid, $username, $comment, $actor, ['name' => $name, 'surname' => $surname]);
+				self::logActivity(
+					'flag',
+					$user['userid'],
+					$user['username'],
+					$comment,
+					$actor,
+					[
+						'name' => $user['name'],
+						'surname' => $user['surname']
+					]
+				);
 			}
 
 			if (!self::saveQueue($queue)) {
 				$this->respondJson(false, _('Failed to write approval queue.'));
 			}
 
-			$this->respondJson(true, _('Users flagged for approval.'), ['count' => count($userids)]);
+			$this->respondJson(
+				true,
+				_('Users flagged for approval.'),
+				['count' => count($userids)]
+			);
 		}
 
 		if ($mode === 'approve') {
@@ -235,32 +306,61 @@ class UserPolicyExecute extends CController {
 
 			$queue = self::loadQueue();
 
-			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
+			if (
+				!isset($queue[$queue_index]) ||
+				($queue[$queue_index]['status'] ?? '') !== 'pending'
+			) {
 				$this->respondJson(false, _('This request is no longer pending.'));
 			}
 
 			$entry = $queue[$queue_index];
 
-			// Separation of duties: whoever flagged the request cannot also
-			// approve it. Prevents a single Super Admin from bypassing review
-			// by flagging then immediately approving their own request.
 			if (($entry['flagged_by'] ?? null) === $actor) {
-				$this->respondJson(false, _('You cannot approve a request you flagged yourself. Another approver must review it.'));
+				$this->respondJson(
+					false,
+					_('You cannot approve a request you flagged yourself. Another approver must review it.')
+				);
 			}
 
-			// Approval only marks the request approved — it does NOT disable
-			// the user. The account is only actually disabled by a later,
-			// separate 'disable' action (see below), which itself re-checks
-			// that the approved request wasn't flagged by the same actor.
+			/*
+			 * Resolve target details now, by Zabbix userid, instead of using
+			 * potentially blank name/surname stored in approval_queue.json.
+			 */
+			$user = self::getUserIdentity((string) $entry['userid']);
+
 			$queue[$queue_index]['status'] = 'approved';
 			$queue[$queue_index]['approved_by'] = $actor;
 			$queue[$queue_index]['approved_at'] = time();
 			$queue[$queue_index]['approver_comment'] = $comment;
-			self::saveQueue($queue);
 
-			self::logActivity('approve', (string) $entry['userid'], $entry['username'] ?? '', $comment, $actor, ['name' => $entry['name'] ?? '', 'surname' => $entry['surname'] ?? '']);
+			/*
+			 * Refresh queue identity fields too, so later reject/disable
+			 * workflows do not propagate old blank queue values.
+			 */
+			$queue[$queue_index]['username'] = $user['username'];
+			$queue[$queue_index]['name'] = $user['name'];
+			$queue[$queue_index]['surname'] = $user['surname'];
 
-			$this->respondJson(true, _('Request approved. The user can now be disabled.'));
+			if (!self::saveQueue($queue)) {
+				$this->respondJson(false, _('Failed to update approval queue.'));
+			}
+
+			self::logActivity(
+				'approve',
+				$user['userid'],
+				$user['username'],
+				$comment,
+				$actor,
+				[
+					'name' => $user['name'],
+					'surname' => $user['surname']
+				]
+			);
+
+			$this->respondJson(
+				true,
+				_('Request approved. The user can now be disabled.')
+			);
 		}
 
 		if ($mode === 'disable') {
@@ -272,26 +372,38 @@ class UserPolicyExecute extends CController {
 
 			$queue = self::loadQueue();
 
-			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'approved') {
+			if (
+				!isset($queue[$queue_index]) ||
+				($queue[$queue_index]['status'] ?? '') !== 'approved'
+			) {
 				$this->respondJson(false, _('This request has not been approved yet.'));
 			}
 
 			$entry = $queue[$queue_index];
 
-			// Separation of duties: only the Super Admin who approved this
-			// specific request is barred from performing the disable — the
-			// flagger (and any other Super Admin) may disable.
 			if (($entry['approved_by'] ?? null) === $actor) {
-				$this->respondJson(false, _('You cannot disable a user you approved yourself. Another Super Admin must complete this step.'));
+				$this->respondJson(
+					false,
+					_('You cannot disable a user you approved yourself. Another Super Admin must complete this step.')
+				);
 			}
 
 			$disable_comment = $comment;
 			$final_comment = $disable_comment !== ''
-				? $disable_comment . ($entry['comment'] ? ' | Request: ' . $entry['comment'] : '')
+				? $disable_comment . (
+					!empty($entry['comment'])
+						? ' | Request: ' . $entry['comment']
+						: ''
+				)
 				: ($entry['comment'] ?? '');
 
 			try {
-				self::disableUsers([$entry['userid']], $final_comment, $actor, 'disable');
+				self::disableUsers(
+					[(string) $entry['userid']],
+					$final_comment,
+					$actor,
+					'disable'
+				);
 			}
 			catch (\Exception $e) {
 				$this->respondJson(false, $e->getMessage());
@@ -301,7 +413,10 @@ class UserPolicyExecute extends CController {
 			$queue[$queue_index]['disabled_by'] = $actor;
 			$queue[$queue_index]['disabled_at'] = time();
 			$queue[$queue_index]['disable_comment'] = $disable_comment;
-			self::saveQueue($queue);
+
+			if (!self::saveQueue($queue)) {
+				$this->respondJson(false, _('Failed to update approval queue.'));
+			}
 
 			$this->respondJson(true, _('User disabled.'));
 		}
@@ -317,23 +432,49 @@ class UserPolicyExecute extends CController {
 
 			$queue = self::loadQueue();
 
-			if (!isset($queue[$queue_index]) || $queue[$queue_index]['status'] !== 'pending') {
+			if (
+				!isset($queue[$queue_index]) ||
+				($queue[$queue_index]['status'] ?? '') !== 'pending'
+			) {
 				$this->respondJson(false, _('This request is no longer pending.'));
 			}
+
+			$entry = $queue[$queue_index];
+
+			/*
+			 * Resolve target details now, by Zabbix userid. This prevents a
+			 * reject entry from inheriting empty target names from a legacy
+			 * approval queue record.
+			 */
+			$user = self::getUserIdentity((string) $entry['userid']);
 
 			$queue[$queue_index]['status'] = 'rejected';
 			$queue[$queue_index]['resolved_by'] = $actor;
 			$queue[$queue_index]['resolved_at'] = time();
 			$queue[$queue_index]['reject_reason'] = $comment;
-			self::saveQueue($queue);
+			$queue[$queue_index]['username'] = $user['username'];
+			$queue[$queue_index]['name'] = $user['name'];
+			$queue[$queue_index]['surname'] = $user['surname'];
 
-			self::logActivity('reject', (string) $queue[$queue_index]['userid'], $queue[$queue_index]['username'] ?? '', $comment, $actor, ['name' => $queue[$queue_index]['name'] ?? '', 'surname' => $queue[$queue_index]['surname'] ?? '']);
+			if (!self::saveQueue($queue)) {
+				$this->respondJson(false, _('Failed to update approval queue.'));
+			}
+
+			self::logActivity(
+				'reject',
+				$user['userid'],
+				$user['username'],
+				$comment,
+				$actor,
+				[
+					'name' => $user['name'],
+					'surname' => $user['surname']
+				]
+			);
 
 			$this->respondJson(true, _('Request rejected.'));
 		}
 
-		// No other mode reaches here — checkInput() restricts 'mode' to
-		// flag/approve/reject/disable, so there is no direct-disable bypass.
 		$this->respondJson(false, _('Unsupported action.'));
 	}
 }
