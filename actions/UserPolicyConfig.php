@@ -90,6 +90,8 @@ class UserPolicyConfig extends CController {
 			'username' => null,
 			'comment' => $comment,
 			'actor' => $actor,
+			'actor_name' => \CWebUser::$data['name'] ?? '',
+			'actor_surname' => \CWebUser::$data['surname'] ?? '',
 			'clock' => time()
 		];
 
