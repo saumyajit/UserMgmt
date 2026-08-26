@@ -1,0 +1,292 @@
+[
+    {
+        "action": "reject",
+        "userid": "24",
+        "username": "",
+        "comment": "test",
+        "actor": "Admin",
+        "clock": 1787580462
+    },
+    {
+        "action": "flag",
+        "userid": "20",
+        "username": "testuser002",
+        "comment": "",
+        "actor": "Admin",
+        "clock": 1787595556
+    },
+    {
+        "action": "flag",
+        "userid": "19",
+        "username": "testuser001",
+        "comment": "",
+        "actor": "Admin",
+        "clock": 1787640148
+    },
+    {
+        "action": "disable",
+        "userid": "21",
+        "username": "testuser003",
+        "comment": "test",
+        "actor": "Admin",
+        "clock": 1787673337
+    },
+    {
+        "action": "approve",
+        "userid": "19",
+        "username": "testuser001",
+        "comment": "approved",
+        "actor": "testadmin",
+        "clock": 1787676092
+    },
+    {
+        "action": "flag",
+        "userid": "19",
+        "username": "testuser001",
+        "comment": "test",
+        "actor": "Admin",
+        "clock": 1787681987
+    },
+    {
+        "action": "approve",
+        "userid": "19",
+        "username": "testuser001",
+        "comment": "approved_2 | Request: test",
+        "actor": "testadmin",
+        "clock": 1787682028
+    },
+    {
+        "action": "disable",
+        "userid": "19",
+        "username": "testuser001",
+        "comment": "",
+        "actor": "testadmin",
+        "clock": 1787682419
+    },
+    {
+        "action": "approve",
+        "userid": "20",
+        "username": "testuser002",
+        "comment": "approved",
+        "actor": "testadmin",
+        "clock": 1787682435
+    },
+    {
+        "action": "disable",
+        "userid": "20",
+        "username": "testuser002",
+        "comment": "",
+        "actor": "testadmin",
+        "clock": 1787682499
+    },
+    {
+        "action": "flag",
+        "userid": "21",
+        "username": "testuser003",
+        "comment": "needed",
+        "actor": "Admin",
+        "clock": 1787682815
+    },
+    {
+        "action": "approve",
+        "userid": "21",
+        "username": "testuser003",
+        "comment": "aproved",
+        "actor": "testadmin",
+        "clock": 1787682852
+    },
+    {
+        "action": "disable",
+        "userid": "21",
+        "username": "testuser003",
+        "comment": "needed",
+        "actor": "Admin",
+        "clock": 1787683197
+    },
+    {
+        "action": "flag",
+        "userid": "23",
+        "username": "testuser005",
+        "comment": "",
+        "actor": "Admin",
+        "clock": 1787683354
+    },
+    {
+        "action": "reject",
+        "userid": "23",
+        "username": "testuser005",
+        "comment": "not required",
+        "actor": "testadmin",
+        "clock": 1787683381
+    },
+    {
+        "action": "flag",
+        "userid": "23",
+        "username": "testuser005",
+        "comment": "testing",
+        "actor": "Admin",
+        "clock": 1787683401
+    },
+    {
+        "action": "approve",
+        "userid": "23",
+        "username": "testuser005",
+        "comment": "needed",
+        "actor": "testadmin",
+        "clock": 1787683436
+    },
+    {
+        "action": "disable",
+        "userid": "23",
+        "username": "testuser005",
+        "comment": "INC0001010 | Request: testing",
+        "actor": "Admin",
+        "clock": 1787683454
+    },
+    {
+        "action": "flag",
+        "userid": "24",
+        "username": "testuser007",
+        "comment": "testing",
+        "actor": "Admin",
+        "clock": 1787723414
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Approvers: [Admin] \u2192 [Admin, testadmin]",
+        "actor": "Admin",
+        "clock": 1787724317
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Inactivity threshold: 10 \u2192 15 days",
+        "actor": "Admin",
+        "clock": 1787724379
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Min account age: 60 \u2192 90 days",
+        "actor": "Admin",
+        "clock": 1787724394
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Min account age: 90 \u2192 60 days | Inactivity threshold: 15 \u2192 10 days | Approvers: [Admin, testadmin] \u2192 [testadmin]",
+        "actor": "Admin",
+        "clock": 1787726125
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Min account age: 40 \u2192 30 days",
+        "actor": "Admin",
+        "clock": 1787743167
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Min account age: 30 \u2192 60 days | Inactivity threshold: 10 \u2192 15 days",
+        "actor": "Admin",
+        "clock": 1787743246
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Inactivity threshold: 15 \u2192 10 days",
+        "actor": "Admin",
+        "clock": 1787743458
+    },
+    {
+        "action": "settings_update",
+        "userid": null,
+        "username": null,
+        "comment": "Inactivity threshold: 10 \u2192 20 days",
+        "actor": "Admin",
+        "actor_name": "Zabbix",
+        "actor_surname": "Administrator",
+        "clock": 1787747006
+    },
+    {
+        "action": "flag",
+        "userid": "25",
+        "username": "testuser006",
+        "comment": "test",
+        "actor": "Admin",
+        "actor_name": "Zabbix",
+        "actor_surname": "Administrator",
+        "clock": 1787747032,
+        "name": "Test",
+        "surname": "User 006"
+    },
+    {
+        "action": "reject",
+        "userid": "25",
+        "username": "testuser006",
+        "comment": "not required",
+        "actor": "testadmin",
+        "actor_name": "test",
+        "actor_surname": "admin",
+        "clock": 1787748715,
+        "name": "Test",
+        "surname": "User 006"
+    },
+    {
+        "action": "reject",
+        "userid": "24",
+        "username": "testuser007",
+        "comment": "not required",
+        "actor": "testadmin",
+        "actor_name": "test",
+        "actor_surname": "admin",
+        "clock": 1787748721,
+        "name": "",
+        "surname": ""
+    },
+    {
+        "action": "flag",
+        "userid": "26",
+        "username": "testuser008",
+        "comment": "testing",
+        "actor": "Admin",
+        "actor_name": "Zabbix",
+        "actor_surname": "Administrator",
+        "clock": 1787750505,
+        "name": "Test",
+        "surname": "User 008"
+    },
+    {
+        "action": "flag",
+        "userid": "24",
+        "username": "testuser007",
+        "comment": "test",
+        "actor": "Admin",
+        "actor_name": "Zabbix",
+        "actor_surname": "Administrator",
+        "clock": 1787750521,
+        "name": "Test",
+        "surname": "User 007"
+    },
+    {
+        "action": "reject",
+        "userid": "24",
+        "username": "testuser007",
+        "comment": "not required",
+        "actor": "testadmin",
+        "actor_name": "test",
+        "actor_surname": "admin",
+        "clock": 1787750580,
+        "name": "Test",
+        "surname": "User 007"
+    }
+]
