@@ -405,24 +405,41 @@ class UserPolicy extends CController {
 
 		$approval_queue = self::loadApprovalQueue();
 		$pending_userids = [];
+		$approved_userids = [];
 		foreach ($approval_queue as $index => $entry) {
-			if (($entry['status'] ?? '') === 'pending') {
+			$status = $entry['status'] ?? '';
+			$entry['queue_index'] = $index;
+			if ($status === 'pending') {
 				$pending_userids[(string) $entry['userid']] = $entry;
+			}
+			elseif ($status === 'approved') {
+				$approved_userids[(string) $entry['userid']] = $entry;
 			}
 		}
 
 		// Newest-first list of pending entries for the approvals panel, each tagged
 		// with its index in the queue file so approve/reject can address it directly.
 		$pending_queue = [];
+		// Newest-first list of approved-but-not-yet-disabled entries — these are
+		// ready for the separate "Disable" step, which must be performed by a
+		// Super Admin other than whoever originally flagged the request.
+		$approved_queue = [];
 		foreach ($approval_queue as $index => $entry) {
-			if (($entry['status'] ?? '') === 'pending') {
-				$entry['queue_index'] = $index;
+			$status = $entry['status'] ?? '';
+			$entry['queue_index'] = $index;
+			if ($status === 'pending') {
 				$pending_queue[] = $entry;
+			}
+			elseif ($status === 'approved') {
+				$approved_queue[] = $entry;
 			}
 		}
 
 		usort($pending_queue, function ($a, $b) {
 			return ($b['flagged_at'] ?? 0) <=> ($a['flagged_at'] ?? 0);
+		});
+		usort($approved_queue, function ($a, $b) {
+			return ($b['approved_at'] ?? 0) <=> ($a['approved_at'] ?? 0);
 		});
 
 		$disabled_log = self::loadDisabledLog();
@@ -696,6 +713,8 @@ class UserPolicy extends CController {
 			$user['reason'] = $reason;
 			$user['pending_approval'] = isset($pending_userids[$userid]);
 			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
+			$user['approved_pending'] = isset($approved_userids[$userid]);
+			$user['approved_queue_index'] = $approved_userids[$userid]['queue_index'] ?? null;
 			// NEW: last recorded activity for this user, of any action type,
 			// plus who performed it and when — used to populate the Comment
 			// column (and CSV) whenever a disable comment specifically isn't set.
@@ -732,6 +751,7 @@ class UserPolicy extends CController {
 			'config' => $config,
 			'summary' => $summary,
 			'pending_queue' => $pending_queue,
+			'approved_queue' => $approved_queue,
 			'activity_log' => $activity_log_display,
 			'superadmins' => $superadmins
 			'last_login_times' => $last_login_times,

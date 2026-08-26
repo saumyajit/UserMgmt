@@ -5,6 +5,7 @@
 $config = $data['config'];
 $summary = $data['summary'];
 $pending_queue = $data['pending_queue'];
+$approved_queue = $data['approved_queue'];
 $activity_log = $data['activity_log'];
 $superadmins = $data['superadmins'];
 
@@ -15,14 +16,16 @@ function umg_esc($v) {
 $action_labels = [
 	'flag' => _('Flagged for approval'),
 	'disable' => _('Disabled'),
-	'approve' => _('Approved & disabled'),
-	'reject' => _('Rejected')
+	'approve' => _('Approved'),
+	'reject' => _('Rejected'),
+	'settings_update' => _('Settings Updated')
 ];
 $action_classes = [
 	'flag' => 'umg-badge-warning',
 	'disable' => 'umg-badge-danger',
 	'approve' => 'umg-badge-danger',
-	'reject' => 'umg-badge-info'
+	'reject' => 'umg-badge-info',
+	'settings_update' => 'umg-badge-purple'
 ];
 
 // Approvers configured today (usernames), used to pre-seed the chip picker below.
@@ -596,6 +599,15 @@ body, .wrapper {
     background: #2f7dd1;
 }
 
+.umg-badge-purple {
+    background: linear-gradient(90deg, #ece3fb, #f3ecfd);
+    color: #5b2a9d;
+}
+
+.umg-badge-purple::before {
+    background: #8b5cf6;
+}
+
 .umg-results-header {
     display: flex;
     justify-content: space-between;
@@ -845,19 +857,34 @@ button.umg-btn-sm {
 /* Audit Log filter row + structured table */
 .umg-audit-filter-row {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
     flex-wrap: wrap;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .umg-audit-filter-row input, .umg-audit-filter-row select {
-    height: 32px;
+    height: 30px;
     border: 1.5px solid #dde1ea;
-    border-radius: 20px;
-    padding: 0 12px;
-    font-size: 12.5px;
+    border-radius: 16px;
+    padding: 0 10px;
+    font-size: 12px;
     background: #fbfcfe;
+}
+
+/* The generic ".umg-modal input[type=text/date]" rule further down forces
+   width:100% + large top/bottom margins on every text/date input in every
+   modal (it's meant for single-field modals like Flag/Approve/Reject). That
+   rule was leaking into this filter row and stacking each field onto its own
+   full-width line instead of a compact row. This override wins on
+   specificity (two classes instead of one) regardless of source order. */
+.umg-modal .umg-audit-filter-row input[type=text],
+.umg-modal .umg-audit-filter-row input[type=date] {
+    width: auto;
+    margin: 0;
+    box-sizing: border-box;
+    border-radius: 16px;
+    padding: 0 10px;
 }
 
 .umg-audit-filter-row input:focus, .umg-audit-filter-row select:focus {
@@ -867,8 +894,19 @@ button.umg-btn-sm {
 }
 
 .umg-audit-search {
-    min-width: 200px;
-    flex: 1;
+    min-width: 160px;
+    max-width: 280px;
+    flex: 1 1 160px;
+}
+
+.umg-audit-filter-row select {
+    flex: 0 0 auto;
+    min-width: 120px;
+}
+
+.umg-audit-filter-row input[type=date] {
+    flex: 0 0 128px;
+    width: 128px;
 }
 
 .umg-audit-table-wrap {
@@ -924,6 +962,10 @@ button.umg-btn-sm {
     font-size: 11px;
 }
 
+.umg-audit-fullname-cell {
+    color: #374151;
+}
+
 .umg-audit-target {
     color: #374151;
 }
@@ -938,6 +980,73 @@ button.umg-btn-sm {
     color: #8a94a3;
     padding: 24px;
 }
+
+/* new addtion for user full name in audit log modal*/
+.umg-modal-audit {
+	width: 1100px;
+	max-width: 96vw;
+}
+
+.umg-audit-table-wrap {
+	max-height: 65vh;
+	overflow: auto;
+}
+
+.umg-audit-table {
+	width: 100%;
+	min-width: 1040px;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.umg-audit-table th,
+.umg-audit-table td {
+	box-sizing: border-box;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.umg-audit-col-time,
+.umg-audit-time {
+	width: 150px;
+}
+
+.umg-audit-col-actor,
+.umg-audit-actor {
+	width: 90px;
+	font-weight: 700;
+}
+
+.umg-audit-col-actor-name,
+.umg-audit-actor-name {
+	width: 145px;
+}
+
+.umg-audit-col-action,
+.umg-audit-action {
+	width: 150px;
+}
+
+.umg-audit-col-target,
+.umg-audit-target {
+	width: 140px;
+}
+
+.umg-audit-col-target-name,
+.umg-audit-target-name {
+	width: 145px;
+}
+
+.umg-audit-col-comment,
+.umg-audit-comment {
+	width: auto;
+	max-width: none;
+}
+
+.umg-audit-target .umg-audit-actor-sub {
+	white-space: nowrap;
+}
+
 
 /* Approvers picker: chip-based "search & select" multiselect */
 .umg-ms {
@@ -1156,6 +1265,13 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-card-value"><?= umg_esc($pending_count) ?></div>
 	</div>
+	<div class="umg-card umg-accent-ok" id="umg-ready-disable-card" style="cursor:pointer;" title="<?= _('View users ready to disable') ?>">
+		<div class="umg-card-header">
+			<span class="umg-card-icon">&#9989;</span>
+			<span class="umg-card-title"><?= _('Ready to Disable') ?></span>
+		</div>
+		<div class="umg-card-value"><?= umg_esc(count($approved_queue)) ?></div>
+	</div>
 </div>
 
 <div class="umg-panel">
@@ -1195,8 +1311,7 @@ button.umg-btn-sm {
 			<span class="umg-match-count" id="umg-match-count"></span>
 		</div>
 		<div class="umg-toolbar">
-			<button type="button" class="umg-btn" id="umg-flag-selected">&#9873; <?= _('Request for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-selected">&#128683; <?= _('Disable Users') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-flag-selected">&#9873; <?= _('Request for Approval') ?></button>
 		</div>
 	</div>
 
@@ -1206,6 +1321,7 @@ button.umg-btn-sm {
 				<tr>
 					<th><input type="checkbox" id="umg-select-all"></th>
 					<th><?= _('User') ?></th>
+					<th><?= _('Full Name') ?></th>
 					<th><?= _('Account Created') ?></th>
 					<th><?= _('Last Login') ?></th>
 					<th><?= _('Account Age') ?></th>
@@ -1250,10 +1366,14 @@ button.umg-btn-sm {
 						$rec_class = 'umg-badge-warning';
 						$rec_label = _('Pending Approval');
 					}
-					elseif ($user['reason'] === 'already_disabled') {
-						$rec_class = 'umg-badge-info';
-						$rec_label = _('Already Disabled');
+					elseif ($user['approved_pending']) {
+						$rec_class = 'umg-badge-warning';
+						$rec_label = _('Approved — Ready to Disable');
 					}
+#					elseif ($user['reason'] === 'already_disabled') {
+#						$rec_class = 'umg-badge-info';
+#						$rec_label = _('Already Disabled');
+#					}
 					elseif ($user['recommendation'] === 'disable') {
 						$rec_class = 'umg-badge-danger';
 						$rec_label = _('Disable');
@@ -1263,7 +1383,7 @@ button.umg-btn-sm {
 						$rec_label = _('No Action');
 					}
 
-					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'];
+					$can_act = $user['recommendation'] === 'disable' && !$user['pending_approval'] && !$user['approved_pending'];
 
 					// Comment/audit fields are still computed (needed for the CSV export)
 					// even though the visible "Comment" column has been removed below.
@@ -1295,6 +1415,7 @@ button.umg-btn-sm {
 							<div class="umg-username"><?= umg_esc($user['username']) ?></div>
 							<div class="umg-subtext"><?= _('User ID:') ?> <?= umg_esc($user['userid']) ?></div>
 						</td>
+						<td class="umg-fullname-cell"><?php $full_name = trim(($user['name'] ?? '') . ' ' . ($user['surname'] ?? '')); ?><?= $full_name !== '' ? umg_esc($full_name) : '&mdash;' ?></td>
 						<td><?= umg_esc($creation_str) ?></td>
 						<td><?= umg_esc($login_str) ?></td>
 						<td><?= umg_esc($account_age) ?></td>
@@ -1303,7 +1424,9 @@ button.umg-btn-sm {
 						<td><span class="umg-badge <?= $rec_class ?>"><?= umg_esc($rec_label) ?></span></td>
 						<td>
 							<?php if ($can_act): ?>
-							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-disable-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Disable') ?></button>
+							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-flag-btn" data-userid="<?= umg_esc($user['userid']) ?>"><?= _('Request Approval') ?></button>
+							<?php elseif ($user['approved_pending']): ?>
+							<button type="button" class="umg-btn umg-btn-danger umg-btn-sm umg-row-approved-disable-btn" data-queue-index="<?= umg_esc($user['approved_queue_index']) ?>" data-username="<?= umg_esc($user['username']) ?>"><?= _('Disable') ?></button>
 							<?php else: ?>
 							—
 							<?php endif; ?>
@@ -1321,20 +1444,22 @@ button.umg-btn-sm {
 	</div>
 </div>
 
-<!-- Disable / Flag modal — also reused by the toolbar "Request for Approval" button. -->
+<!-- Flag-for-approval modal — reused by the row-level "Request Approval" button
+     AND the toolbar "Request for Approval" button. There is no direct-disable
+     path here: every disable must go through the approval queue and be
+     actioned by a *different* Super Admin (see UserPolicyExecute::doAction). -->
 <div class="umg-modal-backdrop" id="umg-modal-backdrop">
 	<div class="umg-modal">
 		<div class="umg-modal-header">
-			<h3>&#128683; <?= _('Disable / Flag Users') ?></h3>
+			<h3>&#9873; <?= _('Request Approval to Disable') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-modal-close-x">&times;</button>
 		</div>
 		<div class="umg-card-title" id="umg-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
-		<label><?= _('Request No. / Comment (required to disable immediately, optional to flag)') ?></label>
+		<label><?= _('Request No. / Comment') ?></label>
 		<textarea rows="3" id="umg-modal-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-modal-cancel"><?= _('Cancel') ?></button>
-			<button type="button" class="umg-btn" id="umg-modal-flag"><?= _('Flag for Approval') ?></button>
-			<button type="button" class="umg-btn umg-btn-danger" id="umg-modal-confirm"><?= _('Disable Now') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-modal-flag"><?= _('Submit for Approval') ?></button>
 		</div>
 	</div>
 </div>
@@ -1343,15 +1468,34 @@ button.umg-btn-sm {
 <div class="umg-modal-backdrop" id="umg-approve-modal-backdrop">
 	<div class="umg-modal">
 		<div class="umg-modal-header">
-			<h3>&#9989; <?= _('Approve & Disable') ?></h3>
+			<h3>&#9989; <?= _('Approve Request') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-approve-close-x">&times;</button>
 		</div>
 		<div class="umg-card-title" id="umg-approve-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
+		<div class="umg-subtext" style="margin-bottom:8px;"><?= _('Approving only marks this request approved. A different Super Admin will still need to complete the separate Disable step.') ?></div>
 		<label><?= _('Approval Comment (optional, added to the requester\'s comment)') ?></label>
 		<textarea rows="3" id="umg-approve-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-approve-cancel"><?= _('Cancel') ?></button>
-			<button type="button" class="umg-btn umg-btn-primary" id="umg-approve-confirm"><?= _('Approve & Disable') ?></button>
+			<button type="button" class="umg-btn umg-btn-primary" id="umg-approve-confirm"><?= _('Approve') ?></button>
+		</div>
+	</div>
+</div>
+
+<!-- Disable modal — for requests already approved. Server-side re-enforces that
+     the acting Super Admin isn't the same person who flagged the request. -->
+<div class="umg-modal-backdrop" id="umg-disable-modal-backdrop">
+	<div class="umg-modal">
+		<div class="umg-modal-header">
+			<h3>&#128683; <?= _('Disable User') ?></h3>
+			<button type="button" class="umg-modal-close-x" id="umg-disable-modal-close-x">&times;</button>
+		</div>
+		<div class="umg-card-title" id="umg-disable-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
+		<label><?= _('Comment (optional)') ?></label>
+		<textarea rows="3" id="umg-disable-comment"></textarea>
+		<div class="umg-modal-actions">
+			<button type="button" class="umg-btn" id="umg-disable-modal-cancel"><?= _('Cancel') ?></button>
+			<button type="button" class="umg-btn umg-btn-danger" id="umg-disable-modal-confirm"><?= _('Disable Now') ?></button>
 		</div>
 	</div>
 </div>
@@ -1385,6 +1529,10 @@ button.umg-btn-sm {
 		<div class="umg-approval-item">
 			<div class="umg-approval-meta">
 				<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
+				<?php $entry_full_name = trim(($entry['name'] ?? '') . ' ' . ($entry['surname'] ?? '')); ?>
+				<?php if ($entry_full_name !== ''): ?>
+				<span class="umg-subtext-inline"><?= umg_esc($entry_full_name) ?></span>
+				<?php endif; ?>
 				<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
 				<span class="umg-approval-dot">&middot;</span>
 				<span class="umg-approval-flagged-inline">
@@ -1404,7 +1552,7 @@ button.umg-btn-sm {
 				</button>
 				<button type="button" class="umg-btn umg-btn-sm umg-btn-primary umg-approve-btn"
 					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
-					<?= _('Approve & Disable') ?>
+					<?= _('Approve') ?>
 				</button>
 			</div>
 		</div>
@@ -1412,85 +1560,208 @@ button.umg-btn-sm {
 		<?php else: ?>
 		<div class="umg-empty-state"><span class="umg-empty-icon">&#9203;</span><?= _('No pending approvals right now.') ?></div>
 		<?php endif; ?>
+
+		<?php if ($approved_queue): ?>
+		<h3 style="margin:16px 0 8px;font-size:14px;"><?= _('Approved — Ready to Disable') ?></h3>
+		<?php foreach ($approved_queue as $entry): ?>
+		<div class="umg-approval-item">
+			<div class="umg-approval-meta">
+				<span class="umg-username"><?= umg_esc($entry['username']) ?></span>
+				<?php $entry_full_name = trim(($entry['name'] ?? '') . ' ' . ($entry['surname'] ?? '')); ?>
+				<?php if ($entry_full_name !== ''): ?>
+				<span class="umg-subtext-inline"><?= umg_esc($entry_full_name) ?></span>
+				<?php endif; ?>
+				<span class="umg-subtext-inline">(<?= _('User ID:') ?> <?= umg_esc($entry['userid']) ?>)</span>
+				<span class="umg-approval-dot">&middot;</span>
+				<span class="umg-approval-flagged-inline">
+					<?= _('Flagged by') ?> <strong><?= umg_esc($entry['flagged_by']) ?></strong>
+					<?= _('· Approved by') ?> <strong><?= umg_esc($entry['approved_by'] ?? '') ?></strong>
+					<?php if (!empty($entry['approved_at'])): ?>
+						&middot; <?= umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['approved_at'])) ?>
+					<?php endif; ?>
+				</span>
+				<?php if (!empty($entry['comment'])): ?>
+				<span class="umg-approval-comment-inline" title="<?= umg_esc($entry['comment']) ?>">&#128172; <?= umg_esc($entry['comment']) ?></span>
+				<?php endif; ?>
+			</div>
+			<div class="umg-approval-actions">
+				<button type="button" class="umg-btn umg-btn-sm umg-btn-danger umg-approved-disable-btn"
+					data-index="<?= umg_esc($entry['queue_index']) ?>" data-username="<?= umg_esc($entry['username']) ?>">
+					<?= _('Disable') ?>
+				</button>
+			</div>
+		</div>
+		<?php endforeach; ?>
+		<?php endif; ?>
 	</div>
 </div>
 
 <!-- Audit Log modal: structured table (Time / Actor / Action / Target User / Comment)
      with a "Details" button for long comments, closes on Esc or the × in the header. -->
+<!-- Audit Log modal: actor and target identities are kept in separate,
+     aligned columns. Long comments open in the Details popup. -->
 <div class="umg-modal-backdrop" id="umg-audit-modal-backdrop">
-	<div class="umg-modal umg-modal-xwide">
+	<div class="umg-modal umg-modal-xwide umg-modal-audit">
 		<div class="umg-modal-header">
 			<h3>&#128337; <?= _('Audit Log') ?></h3>
-			<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">&times;</button>
+
+			<div style="display:flex;align-items:center;gap:8px;">
+				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-export-csv">
+					&#128228; <?= _('Export CSV') ?>
+				</button>
+
+				<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">
+					&times;
+				</button>
+			</div>
 		</div>
 
 		<?php if ($activity_log): ?>
-		<div class="umg-audit-filter-row">
-			<input type="text" id="umg-audit-search" class="umg-audit-search" placeholder="<?= _('Search actor / user / comment...') ?>">
-			<select id="umg-audit-action-filter">
-				<option value=""><?= _('All Actions') ?></option>
-				<?php foreach ($action_labels as $key => $label): ?>
-				<option value="<?= umg_esc($key) ?>"><?= umg_esc($label) ?></option>
-				<?php endforeach; ?>
-			</select>
-			<input type="date" id="umg-audit-from-date" title="<?= _('From date') ?>">
-			<input type="date" id="umg-audit-to-date" title="<?= _('To date') ?>">
-			<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-clear">&times; <?= _('Clear') ?></button>
-		</div>
+			<div class="umg-audit-filter-row">
+				<input
+					type="text"
+					id="umg-audit-search"
+					class="umg-audit-search"
+					placeholder="<?= _('Search actor / target / comment...') ?>"
+				>
 
-		<div class="umg-audit-table-wrap">
-			<table class="umg-audit-table" id="umg-audit-table">
-				<thead>
-					<tr>
-						<th><?= _('Time') ?></th>
-						<th><?= _('Actor') ?></th>
-						<th><?= _('Action') ?></th>
-						<th><?= _('Target User') ?></th>
-						<th><?= _('Comment') ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ($activity_log as $entry): ?>
-						<?php
-						$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
-						$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
-						$comment_full = trim((string) ($entry['comment'] ?? ''));
-						$is_long = mb_strlen($comment_full) > UMG_LOG_COMMENT_TRUNCATE;
-						$comment_short = $is_long ? (mb_substr($comment_full, 0, UMG_LOG_COMMENT_TRUNCATE) . '…') : $comment_full;
-						$search_blob = mb_strtolower(($entry['actor'] ?? '') . ' ' . ($entry['username'] ?? '') . ' ' . $comment_full);
-						?>
-						<tr data-action="<?= umg_esc($entry['action'] ?? '') ?>" data-clock="<?= umg_esc($entry['clock'] ?? 0) ?>" data-search="<?= umg_esc($search_blob) ?>">
-							<td class="umg-audit-time"><?= !empty($entry['clock']) ? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])) : '-' ?></td>
-							<td>
-								<div class="umg-audit-actor"><?= umg_esc($entry['actor'] ?? '-') ?></div>
-							</td>
-							<td><span class="umg-badge <?= $badge_class ?>"><?= umg_esc($badge_label) ?></span></td>
-							<td class="umg-audit-target">
-								<?= umg_esc($entry['username'] ?? '-') ?>
-								<div class="umg-audit-actor-sub"><?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?></div>
-							</td>
-							<td class="umg-audit-comment">
-								<?php if ($comment_full === ''): ?>
-									-
-								<?php else: ?>
-									<?= umg_esc($comment_short) ?>
-									<?php if ($is_long): ?>
-									<br>
-									<button type="button" class="umg-btn umg-btn-sm umg-audit-details-btn" style="margin-top:4px;"
-										data-full="<?= umg_esc($comment_full) ?>"
-										data-meta="<?= umg_esc((!empty($entry['clock']) ? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock']) : '-') . ' · ' . ($entry['actor'] ?? '-') . ' · ' . $badge_label . ' · ' . ($entry['username'] ?? '-')) ?>">
-										<?= _('Details') ?>
-									</button>
-									<?php endif; ?>
-								<?php endif; ?>
-							</td>
-						</tr>
+				<select id="umg-audit-action-filter">
+					<option value=""><?= _('All Actions') ?></option>
+
+					<?php foreach ($action_labels as $key => $label): ?>
+						<option value="<?= umg_esc($key) ?>">
+							<?= umg_esc($label) ?>
+						</option>
 					<?php endforeach; ?>
-				</tbody>
-			</table>
-		</div>
+				</select>
+
+				<input type="date" id="umg-audit-from-date" title="<?= _('From date') ?>">
+				<input type="date" id="umg-audit-to-date" title="<?= _('To date') ?>">
+
+				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-clear">
+					&times; <?= _('Clear') ?>
+				</button>
+			</div>
+
+			<div class="umg-audit-table-wrap">
+				<table class="umg-audit-table" id="umg-audit-table">
+					<thead>
+						<tr>
+							<th class="umg-audit-col-time"><?= _('Time') ?></th>
+							<th class="umg-audit-col-actor"><?= _('Actor') ?></th>
+							<th class="umg-audit-col-actor-name"><?= _('Actor Full Name') ?></th>
+							<th class="umg-audit-col-action"><?= _('Action') ?></th>
+							<th class="umg-audit-col-target"><?= _('Target User') ?></th>
+							<th class="umg-audit-col-target-name"><?= _('Target Full Name') ?></th>
+							<th class="umg-audit-col-comment"><?= _('Comment') ?></th>
+						</tr>
+					</thead>
+
+					<tbody>
+						<?php foreach ($activity_log as $entry): ?>
+							<?php
+							$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
+							$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
+
+							$comment_full = trim((string) ($entry['comment'] ?? ''));
+							$is_long = mb_strlen($comment_full) > UMG_LOG_COMMENT_TRUNCATE;
+							$comment_short = $is_long
+								? mb_substr($comment_full, 0, UMG_LOG_COMMENT_TRUNCATE) . '…'
+								: $comment_full;
+
+							$actor_full_name = trim(
+								($entry['actor_name'] ?? '') . ' ' . ($entry['actor_surname'] ?? '')
+							);
+
+							$target_full_name = trim(
+								($entry['name'] ?? '') . ' ' . ($entry['surname'] ?? '')
+							);
+
+							$search_blob = mb_strtolower(
+								($entry['actor'] ?? '') . ' ' .
+								$actor_full_name . ' ' .
+								($entry['username'] ?? '') . ' ' .
+								$target_full_name . ' ' .
+								$comment_full
+							);
+							?>
+
+							<tr
+								data-action="<?= umg_esc($entry['action'] ?? '') ?>"
+								data-clock="<?= umg_esc($entry['clock'] ?? 0) ?>"
+								data-search="<?= umg_esc($search_blob) ?>"
+							>
+								<td class="umg-audit-time">
+									<?= !empty($entry['clock'])
+										? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock']))
+										: '-' ?>
+								</td>
+
+								<td class="umg-audit-actor">
+									<?= umg_esc($entry['actor'] ?? '-') ?>
+								</td>
+
+								<td class="umg-audit-actor-name">
+									<?= $actor_full_name !== '' ? umg_esc($actor_full_name) : '-' ?>
+								</td>
+
+								<td class="umg-audit-action">
+									<span class="umg-badge <?= umg_esc($badge_class) ?>">
+										<?= umg_esc($badge_label) ?>
+									</span>
+								</td>
+
+								<td class="umg-audit-target">
+									<?= umg_esc($entry['username'] ?? '-') ?>
+
+									<div class="umg-audit-actor-sub">
+										<?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?>
+									</div>
+								</td>
+
+								<td class="umg-audit-target-name">
+									<?= $target_full_name !== '' ? umg_esc($target_full_name) : '-' ?>
+								</td>
+
+								<td class="umg-audit-comment">
+									<?php if ($comment_full === ''): ?>
+										-
+									<?php else: ?>
+										<?= umg_esc($comment_short) ?>
+
+										<?php if ($is_long): ?>
+											<br>
+
+											<button
+												type="button"
+												class="umg-btn umg-btn-sm umg-audit-details-btn"
+												style="margin-top:4px;"
+												data-full="<?= umg_esc($comment_full) ?>"
+												data-meta="<?= umg_esc(
+													(!empty($entry['clock'])
+														? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])
+														: '-'
+													)
+													. ' · ' . ($entry['actor'] ?? '-')
+													. ' · ' . $badge_label
+													. ' · ' . ($entry['username'] ?? '-')
+												) ?>"
+											>
+												<?= _('Details') ?>
+											</button>
+										<?php endif; ?>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
 		<?php else: ?>
-		<div class="umg-empty-state"><span class="umg-empty-icon">&#128203;</span><?= _('No activity recorded yet.') ?></div>
+			<div class="umg-empty-state">
+				<span class="umg-empty-icon">&#128203;</span>
+				<?= _('No activity recorded yet.') ?>
+			</div>
 		<?php endif; ?>
 	</div>
 </div>
@@ -1622,13 +1893,58 @@ button.umg-btn-sm {
 	// ---- whichever modal is active. ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
-
+	
 	document.addEventListener('keydown', function(e) {
-		if (e.key === 'Escape' || e.keyCode === 27) {
-			document.querySelectorAll('.umg-modal-backdrop.umg-open').forEach(closeBackdrop);
+		if (e.key !== 'Escape' && e.keyCode !== 27) {
+			return;
+			}
+			
+			var openBackdrops = Array.prototype.slice.call(
+			document.querySelectorAll('.umg-modal-backdrop.umg-open')
+		);
+		
+		if (!openBackdrops.length) {
+			return;
+			}
+		
+		/*
+		* Close only the top-most active popup.
+		*
+		* All backdrops use the same base z-index, so DOM order is the reliable
+		* stacking rule: a modal declared later in user.policy.php is displayed
+		* above an earlier open modal. The last .umg-open element is therefore
+		* the currently active popup.
+		*/
+		var activeBackdrop = openBackdrops[openBackdrops.length - 1];
+		
+		closeBackdrop(activeBackdrop);
+		
+		/*
+		* If Approve / Reject / Disable was opened from Pending for Approval,
+		* restore the parent popup after closing only the child modal.
+		*
+		* This uses the existing reopenPendingOnCancel state that is already set
+		* by openFromPending().
+		*/
+		if (
+			reopenPendingOnCancel &&
+			(
+			activeBackdrop === approveBackdrop ||
+			activeBackdrop === rejectBackdrop ||
+			activeBackdrop === disableBackdrop
+			)
+			) {
+			openBackdrop(pendingBackdropEl);
+			reopenPendingOnCancel = false;
+			}
+			
 			var dd = document.getElementById('umg-approvers-dropdown');
-			if (dd) dd.classList.remove('umg-open');
-		}
+			if (dd) {
+			dd.classList.remove('umg-open');
+			}
+			
+			e.preventDefault();
+			e.stopPropagation();
 	});
 
 	// Disable / Flag modal (shared by row-level Disable button AND the toolbar
@@ -1651,18 +1967,13 @@ button.umg-btn-sm {
 	document.getElementById('umg-modal-cancel').addEventListener('click', closeModal);
 	document.getElementById('umg-modal-close-x').addEventListener('click', closeModal);
 
-	document.getElementById('umg-disable-selected').addEventListener('click', function() {
-		var ids = getSelectedUserIds();
-		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
-		openModal(ids);
-	});
 	document.getElementById('umg-flag-selected').addEventListener('click', function() {
 		var ids = getSelectedUserIds();
 		if (!ids.length) { alert('<?= _('Select at least one user.') ?>'); return; }
 		openModal(ids);
 	});
 	table.addEventListener('click', function(e) {
-		if (e.target.classList.contains('umg-row-disable-btn')) {
+		if (e.target.classList.contains('umg-row-flag-btn')) {
 			openModal([e.target.getAttribute('data-userid')]);
 		}
 	});
@@ -1687,14 +1998,33 @@ button.umg-btn-sm {
 			.catch(function() { alert('<?= _('Request failed.') ?>'); });
 	}
 
-	document.getElementById('umg-modal-confirm').addEventListener('click', function() {
-		submitAction({ userids: pendingUserIds, mode: 'immediate', comment: modalComment.value.trim() });
-		closeModal();
-	});
 	document.getElementById('umg-modal-flag').addEventListener('click', function() {
 		submitAction({ userids: pendingUserIds, mode: 'flag', comment: modalComment.value.trim() });
 		closeModal();
 	});
+
+	// Approve/Reject/Disable modals can be opened either directly from the main
+	// table (row-level buttons) or from *inside* the still-open Approval
+	// Requests popup. All modal backdrops share the same z-index, so opening
+	// one while another is open stacks them by DOM order — which put the
+	// action modal BEHIND the popup. Fix: close the popup first when opening
+	// from within it, and reopen it if the action is cancelled (a successful
+	// submit reloads the page anyway, so nothing to reopen there).
+	var pendingBackdropEl = document.getElementById('umg-pending-modal-backdrop');
+	var reopenPendingOnCancel = false;
+
+	function openFromPending(backdrop) {
+		reopenPendingOnCancel = pendingBackdropEl.classList.contains('umg-open');
+		closeBackdrop(pendingBackdropEl);
+		openBackdrop(backdrop);
+	}
+	function closeAndMaybeReopenPending(backdrop) {
+		closeBackdrop(backdrop);
+		if (reopenPendingOnCancel) {
+			openBackdrop(pendingBackdropEl);
+			reopenPendingOnCancel = false;
+		}
+	}
 
 	// Approve modal
 	var approveBackdrop = document.getElementById('umg-approve-modal-backdrop');
@@ -1707,14 +2037,51 @@ button.umg-btn-sm {
 			approveIndex = btn.getAttribute('data-index');
 			approveUserlist.textContent = btn.getAttribute('data-username');
 			approveComment.value = '';
-			openBackdrop(approveBackdrop);
+			openFromPending(approveBackdrop);
 		});
 	});
-	document.getElementById('umg-approve-cancel').addEventListener('click', function() { closeBackdrop(approveBackdrop); });
-	document.getElementById('umg-approve-close-x').addEventListener('click', function() { closeBackdrop(approveBackdrop); });
+	document.getElementById('umg-approve-cancel').addEventListener('click', function() { closeAndMaybeReopenPending(approveBackdrop); });
+	document.getElementById('umg-approve-close-x').addEventListener('click', function() { closeAndMaybeReopenPending(approveBackdrop); });
 	document.getElementById('umg-approve-confirm').addEventListener('click', function() {
 		submitAction({ mode: 'approve', queue_index: approveIndex, comment: approveComment.value.trim() });
 		closeBackdrop(approveBackdrop);
+	});
+
+	// Disable modal — shared by the "Disable" button in the Approved section of
+	// the Approval Requests popup AND the per-row Disable button that appears
+	// once a user's request has been approved.
+	var disableBackdrop = document.getElementById('umg-disable-modal-backdrop');
+	var disableUserlist = document.getElementById('umg-disable-modal-userlist');
+	var disableComment = document.getElementById('umg-disable-comment');
+	var disableIndex = null;
+
+	function openDisableModal(queueIndex, username, fromPending) {
+		disableIndex = queueIndex;
+		disableUserlist.textContent = username || '';
+		disableComment.value = '';
+		if (fromPending) {
+			openFromPending(disableBackdrop);
+		}
+		else {
+			openBackdrop(disableBackdrop);
+		}
+	}
+
+	document.querySelectorAll('.umg-approved-disable-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			openDisableModal(btn.getAttribute('data-index'), btn.getAttribute('data-username'), true);
+		});
+	});
+	table.addEventListener('click', function(e) {
+		if (e.target.classList.contains('umg-row-approved-disable-btn')) {
+			openDisableModal(e.target.getAttribute('data-queue-index'), e.target.getAttribute('data-username'), false);
+		}
+	});
+	document.getElementById('umg-disable-modal-cancel').addEventListener('click', function() { closeAndMaybeReopenPending(disableBackdrop); });
+	document.getElementById('umg-disable-modal-close-x').addEventListener('click', function() { closeAndMaybeReopenPending(disableBackdrop); });
+	document.getElementById('umg-disable-modal-confirm').addEventListener('click', function() {
+		submitAction({ mode: 'disable', queue_index: disableIndex, comment: disableComment.value.trim() });
+		closeBackdrop(disableBackdrop);
 	});
 
 	// Reject modal
@@ -1726,11 +2093,11 @@ button.umg-btn-sm {
 		btn.addEventListener('click', function() {
 			rejectIndex = btn.getAttribute('data-index');
 			rejectComment.value = '';
-			openBackdrop(rejectBackdrop);
+			openFromPending(rejectBackdrop);
 		});
 	});
-	document.getElementById('umg-reject-cancel').addEventListener('click', function() { closeBackdrop(rejectBackdrop); });
-	document.getElementById('umg-reject-close-x').addEventListener('click', function() { closeBackdrop(rejectBackdrop); });
+	document.getElementById('umg-reject-cancel').addEventListener('click', function() { closeAndMaybeReopenPending(rejectBackdrop); });
+	document.getElementById('umg-reject-close-x').addEventListener('click', function() { closeAndMaybeReopenPending(rejectBackdrop); });
 	document.getElementById('umg-reject-confirm').addEventListener('click', function() {
 		submitAction({ mode: 'reject', queue_index: rejectIndex, comment: rejectComment.value.trim() });
 		closeBackdrop(rejectBackdrop);
@@ -1747,6 +2114,10 @@ button.umg-btn-sm {
 	var pendingCard = document.getElementById('umg-pending-card');
 	if (pendingCard) {
 		pendingCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
+	}
+	var readyDisableCard = document.getElementById('umg-ready-disable-card');
+	if (readyDisableCard) {
+		readyDisableCard.addEventListener('click', function() { openBackdrop(pendingBackdrop); });
 	}
 
 	// Audit Log modal wiring + client-side search/action/date filtering
@@ -1766,33 +2137,102 @@ button.umg-btn-sm {
 		var auditFromDate = document.getElementById('umg-audit-from-date');
 		var auditToDate = document.getElementById('umg-audit-to-date');
 
+		// Build the searchable text straight from what's actually rendered in
+		// each row (actor / target user / comment cells) instead of trusting a
+		// separately server-built data-search attribute to stay in sync with
+		// it — removes any chance of the two silently drifting apart (quote/
+		// unicode encoding, etc.) as a cause of "search matches nothing".
+		auditRows.forEach(function(row) {
+			var actorText = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
+			var targetText = (row.querySelector('.umg-audit-target') || {}).textContent || '';
+			var nameText = (row.querySelector('.umg-audit-fullname-cell') || {}).textContent || '';
+			var commentText = (row.querySelector('.umg-audit-comment') || {}).textContent || '';
+			var detailsBtn = row.querySelector('.umg-audit-details-btn');
+			var fullComment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : '';
+			row.__auditSearchText = (actorText + ' ' + targetText + ' ' + nameText + ' ' + commentText + ' ' + fullComment).toLowerCase();
+		});
+
 		function applyAuditFilters() {
 			var q = auditSearch.value.trim().toLowerCase();
 			var action = auditActionFilter.value;
-			var fromTs = auditFromDate.value ? new Date(auditFromDate.value + 'T00:00:00').getTime() / 1000 : null;
-			var toTs = auditToDate.value ? new Date(auditToDate.value + 'T23:59:59').getTime() / 1000 : null;
+			// valueAsNumber is UTC midnight (ms) for the picked calendar date —
+			// unambiguous, unlike parsing a "YYYY-MM-DDT00:00:00" string (which
+			// depends on local-timezone parsing rules and was silently drifting
+			// the comparison against the server's UTC-epoch data-clock values).
+			var fromTs = (auditFromDate.value && !isNaN(auditFromDate.valueAsNumber)) ? auditFromDate.valueAsNumber / 1000 : null;
+			var toTs = (auditToDate.value && !isNaN(auditToDate.valueAsNumber)) ? (auditToDate.valueAsNumber / 1000) + 86399 : null;
 
+			var visible = 0;
 			auditRows.forEach(function(row) {
 				var matches = true;
-				if (q && row.getAttribute('data-search').indexOf(q) === -1) matches = false;
+				if (q && row.__auditSearchText.indexOf(q) === -1) matches = false;
 				if (action && row.getAttribute('data-action') !== action) matches = false;
 				var clock = parseInt(row.getAttribute('data-clock'), 10) || 0;
 				if (fromTs !== null && clock < fromTs) matches = false;
 				if (toTs !== null && clock > toTs) matches = false;
 				row.classList.toggle('umg-row-hidden', !matches);
+				if (matches) visible++;
 			});
 		}
 
 		auditSearch.addEventListener('input', applyAuditFilters);
 		auditActionFilter.addEventListener('change', applyAuditFilters);
 		auditFromDate.addEventListener('change', applyAuditFilters);
+		auditFromDate.addEventListener('input', applyAuditFilters);
 		auditToDate.addEventListener('change', applyAuditFilters);
+		auditToDate.addEventListener('input', applyAuditFilters);
 		document.getElementById('umg-audit-clear').addEventListener('click', function() {
 			auditSearch.value = '';
 			auditActionFilter.value = '';
 			auditFromDate.value = '';
 			auditToDate.value = '';
 			applyAuditFilters();
+		});
+
+		// Export CSV — respects whatever the filters currently have visible,
+		// same convention as the main table's Export CSV. csvSafe/csvField are
+		// declared further down in this same IIFE but function declarations
+		// are hoisted, so they're already callable here.
+		document.getElementById('umg-audit-export-csv').addEventListener('click', function() {
+			var header = ['Time', 'Actor', 'Actor Full Name', 'Action', 'Target User', 'Target Full Name', 'User ID', 'Comment'];
+			var lines = [header.join(',')];
+		
+			function auditCsvField(text) {
+				text = csvSafe(text);
+				if (/,|"|\n/.test(text)) {
+					text = '"' + text.replace(/"/g, '""') + '"';
+				}
+				return text;
+			}
+		
+			auditRows.forEach(function(row) {
+				if (row.classList.contains('umg-row-hidden')) return;
+				var cells = row.querySelectorAll('td');
+				var time = cells[0].textContent.trim();
+				var actor = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
+				var actorFullName = (row.querySelector('.umg-audit-actor-name') || {}).textContent || '';
+				var action = cells[3].textContent.trim();
+				var targetCell = cells[4];
+				var subDiv = targetCell.querySelector('.umg-audit-actor-sub');
+				var userid = subDiv ? subDiv.textContent.replace(/^[^:]*:/, '').trim() : '';
+				var username = subDiv ? targetCell.textContent.replace(subDiv.textContent, '').trim() : targetCell.textContent.trim();
+				var targetFullName = (row.querySelector('.umg-audit-target-name') || {}).textContent || '';
+				var detailsBtn = row.querySelector('.umg-audit-details-btn');
+				var comment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : cells[6].textContent.trim();
+				
+				var fields = [time, actor.trim(), actorFullName.trim(), action, username, targetFullName.trim(), userid, comment];
+				lines.push(fields.map(auditCsvField).join(','));
+			});
+		
+			var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+			var url = URL.createObjectURL(blob);
+			var a = document.createElement('a');
+			a.href = url;
+			a.download = 'user_management_audit_log.csv';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
 		});
 	}
 
@@ -1952,7 +2392,7 @@ button.umg-btn-sm {
 	}
 
 	document.getElementById('umg-export-csv').addEventListener('click', function() {
-		var header = ['Username', 'User ID', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
+		var header = ['User ID', 'Username', 'Full Name', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
 		var lines = [header.join(',')];
 
 		function csvField(text) {
@@ -1967,11 +2407,12 @@ button.umg-btn-sm {
 			if (row.classList.contains('umg-row-hidden')) return;
 			var cells = row.querySelectorAll('td');
 			var username = cells[1].querySelector('.umg-username').textContent.trim();
+			var fullName = cells[2].textContent.trim();
 			var userid = row.getAttribute('data-userid');
 			var comment = row.getAttribute('data-csv-comment') || '';
-			var fields = [username, userid, cells[2].textContent.trim(), cells[3].textContent.trim(),
-				cells[4].textContent.trim(), cells[5].textContent.trim(), cells[6].textContent.trim(),
-				cells[7].textContent.trim(), comment];
+			var fields = [userid, username, fullName, cells[3].textContent.trim(), cells[4].textContent.trim(),
+				cells[5].textContent.trim(), cells[6].textContent.trim(), cells[7].textContent.trim(),
+				cells[8].textContent.trim(), comment];
 			lines.push(fields.map(csvField).join(','));
 		});
 
