@@ -1893,13 +1893,58 @@ button.umg-btn-sm {
 	// ---- whichever modal is active. ----
 	function openBackdrop(backdrop) { backdrop.classList.add('umg-open'); }
 	function closeBackdrop(backdrop) { backdrop.classList.remove('umg-open'); }
-
+	
 	document.addEventListener('keydown', function(e) {
-		if (e.key === 'Escape' || e.keyCode === 27) {
-			document.querySelectorAll('.umg-modal-backdrop.umg-open').forEach(closeBackdrop);
+		if (e.key !== 'Escape' && e.keyCode !== 27) {
+			return;
+			}
+			
+			var openBackdrops = Array.prototype.slice.call(
+			document.querySelectorAll('.umg-modal-backdrop.umg-open')
+		);
+		
+		if (!openBackdrops.length) {
+			return;
+			}
+		
+		/*
+		* Close only the top-most active popup.
+		*
+		* All backdrops use the same base z-index, so DOM order is the reliable
+		* stacking rule: a modal declared later in user.policy.php is displayed
+		* above an earlier open modal. The last .umg-open element is therefore
+		* the currently active popup.
+		*/
+		var activeBackdrop = openBackdrops[openBackdrops.length - 1];
+		
+		closeBackdrop(activeBackdrop);
+		
+		/*
+		* If Approve / Reject / Disable was opened from Pending for Approval,
+		* restore the parent popup after closing only the child modal.
+		*
+		* This uses the existing reopenPendingOnCancel state that is already set
+		* by openFromPending().
+		*/
+		if (
+			reopenPendingOnCancel &&
+			(
+			activeBackdrop === approveBackdrop ||
+			activeBackdrop === rejectBackdrop ||
+			activeBackdrop === disableBackdrop
+			)
+			) {
+			openBackdrop(pendingBackdropEl);
+			reopenPendingOnCancel = false;
+			}
+			
 			var dd = document.getElementById('umg-approvers-dropdown');
-			if (dd) dd.classList.remove('umg-open');
-		}
+			if (dd) {
+			dd.classList.remove('umg-open');
+			}
+			
+			e.preventDefault();
+			e.stopPropagation();
 	});
 
 	// Disable / Flag modal (shared by row-level Disable button AND the toolbar
