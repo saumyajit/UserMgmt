@@ -137,7 +137,7 @@ class UserPolicyExecute extends CController {
 
 		foreach ($userids as $userid) {
 			$user = API::User()->get([
-				'output' => ['userid', 'username'],
+				'output' => ['userid', 'username', 'name', 'surname'],
 				'selectUsrgrps' => ['usrgrpid'],
 				'userids' => [$userid]
 			]);
@@ -159,7 +159,10 @@ class UserPolicyExecute extends CController {
 				}, $usrgrpids)
 			]);
 
-			self::logActivity($action, (string) $userid, $user[0]['username'], $comment, $actor);
+			self::logActivity($action, (string) $userid, $user[0]['username'], $comment, $actor, [
+				'name' => $user[0]['name'] ?? '',
+				'surname' => $user[0]['surname'] ?? ''
+			]);
 		}
 	}
 
@@ -188,19 +191,23 @@ class UserPolicyExecute extends CController {
 			$now = time();
 
 			foreach ($userids as $userid) {
-				$user = API::User()->get(['output' => ['username'], 'userids' => [$userid]]);
+				$user = API::User()->get(['output' => ['username', 'name', 'surname'], 'userids' => [$userid]]);
 				$username = $user ? $user[0]['username'] : '';
+				$name = $user ? ($user[0]['name'] ?? '') : '';
+				$surname = $user ? ($user[0]['surname'] ?? '') : '';
 
 				$queue[] = [
 					'userid' => (string) $userid,
 					'username' => $username,
+					'name' => $name,
+					'surname' => $surname,
 					'status' => 'pending',
 					'comment' => $comment,
 					'flagged_by' => $actor,
 					'flagged_at' => $now
 				];
 
-				self::logActivity('flag', (string) $userid, $username, $comment, $actor);
+				self::logActivity('flag', (string) $userid, $username, $comment, $actor, ['name' => $name, 'surname' => $surname]);
 			}
 
 			if (!self::saveQueue($queue)) {
@@ -244,7 +251,7 @@ class UserPolicyExecute extends CController {
 			$queue[$queue_index]['approver_comment'] = $comment;
 			self::saveQueue($queue);
 
-			self::logActivity('approve', (string) $entry['userid'], $entry['username'] ?? '', $comment, $actor);
+			self::logActivity('approve', (string) $entry['userid'], $entry['username'] ?? '', $comment, $actor, ['name' => $entry['name'] ?? '', 'surname' => $entry['surname'] ?? '']);
 
 			$this->respondJson(true, _('Request approved. The user can now be disabled.'));
 		}
@@ -313,7 +320,7 @@ class UserPolicyExecute extends CController {
 			$queue[$queue_index]['reject_reason'] = $comment;
 			self::saveQueue($queue);
 
-			self::logActivity('reject', (string) $queue[$queue_index]['userid'], $queue[$queue_index]['username'] ?? '', $comment, $actor);
+			self::logActivity('reject', (string) $queue[$queue_index]['userid'], $queue[$queue_index]['username'] ?? '', $comment, $actor, ['name' => $queue[$queue_index]['name'] ?? '', 'surname' => $queue[$queue_index]['surname'] ?? '']);
 
 			$this->respondJson(true, _('Request rejected.'));
 		}
