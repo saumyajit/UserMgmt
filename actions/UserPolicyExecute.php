@@ -75,6 +75,13 @@ class UserPolicyExecute extends CController {
 			'username' => $username,
 			'comment' => $comment,
 			'actor' => $actor,
+			// The Audit Log's "Full Name" column shows who performed the
+			// action, not the target user — so this is the acting Super
+			// Admin's own name/surname (from their session), pulled here
+			// once so every call site gets it automatically rather than
+			// having to thread it through each of the 4 logActivity() calls.
+			'actor_name' => \CWebUser::$data['name'] ?? '',
+			'actor_surname' => \CWebUser::$data['surname'] ?? '',
 			'clock' => time()
 		], $extra);
 		self::saveJsonFile(self::ACTIVITY_LOG_FILE, $log);
