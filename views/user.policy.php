@@ -962,7 +962,7 @@ button.umg-btn-sm {
     font-size: 11px;
 }
 
-.umg-audit-target-name-cell {
+.umg-audit-fullname-cell {
     color: #374151;
 }
 
@@ -1587,7 +1587,7 @@ button.umg-btn-sm {
 								<?= umg_esc($entry['username'] ?? '-') ?>
 								<div class="umg-audit-actor-sub"><?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?></div>
 							</td>
-							<td class="umg-audit-target-name-cell"><?php $target_full_name = trim(($entry['name'] ?? '') . ' ' . ($entry['surname'] ?? '')); ?><?= $target_full_name !== '' ? umg_esc($target_full_name) : '-' ?></td>
+							<td class="umg-audit-fullname-cell"><?php $actor_full_name = trim(($entry['actor_name'] ?? '') . ' ' . ($entry['actor_surname'] ?? '')); ?><?= $actor_full_name !== '' ? umg_esc($actor_full_name) : '-' ?></td>
 							<td class="umg-audit-comment">
 								<?php if ($comment_full === ''): ?>
 									-
@@ -1948,7 +1948,7 @@ button.umg-btn-sm {
 		auditRows.forEach(function(row) {
 			var actorText = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
 			var targetText = (row.querySelector('.umg-audit-target') || {}).textContent || '';
-			var nameText = (row.querySelector('.umg-audit-target-name-cell') || {}).textContent || '';
+			var nameText = (row.querySelector('.umg-audit-fullname-cell') || {}).textContent || '';
 			var commentText = (row.querySelector('.umg-audit-comment') || {}).textContent || '';
 			var detailsBtn = row.querySelector('.umg-audit-details-btn');
 			var fullComment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : '';
@@ -2018,11 +2018,11 @@ button.umg-btn-sm {
 				var subDiv = targetCell.querySelector('.umg-audit-actor-sub');
 				var userid = subDiv ? subDiv.textContent.replace(/^[^:]*:/, '').trim() : '';
 				var username = subDiv ? targetCell.textContent.replace(subDiv.textContent, '').trim() : targetCell.textContent.trim();
-				var targetFullName = cells[4].textContent.trim();
+				var actorFullName = cells[4].textContent.trim();
 				var detailsBtn = row.querySelector('.umg-audit-details-btn');
 				var comment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : cells[5].textContent.trim();
 
-				var fields = [time, actor.trim(), action, username, targetFullName, userid, comment];
+				var fields = [time, actor.trim(), action, username, actorFullName, userid, comment];
 				lines.push(fields.map(auditCsvField).join(','));
 			});
 
@@ -2194,7 +2194,7 @@ button.umg-btn-sm {
 	}
 
 	document.getElementById('umg-export-csv').addEventListener('click', function() {
-		var header = ['Username', 'Full Name', 'User ID', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
+		var header = ['User ID', 'Username', 'Full Name', 'Account Created', 'Last Login', 'Account Age', 'Inactive For', 'Activity', 'Recommendation', 'Comment'];
 		var lines = [header.join(',')];
 
 		function csvField(text) {
@@ -2212,7 +2212,7 @@ button.umg-btn-sm {
 			var fullName = cells[2].textContent.trim();
 			var userid = row.getAttribute('data-userid');
 			var comment = row.getAttribute('data-csv-comment') || '';
-			var fields = [username, fullName, userid, cells[3].textContent.trim(), cells[4].textContent.trim(),
+			var fields = [userid, username, fullName, cells[3].textContent.trim(), cells[4].textContent.trim(),
 				cells[5].textContent.trim(), cells[6].textContent.trim(), cells[7].textContent.trim(),
 				cells[8].textContent.trim(), comment];
 			lines.push(fields.map(csvField).join(','));
