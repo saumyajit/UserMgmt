@@ -981,6 +981,73 @@ button.umg-btn-sm {
     padding: 24px;
 }
 
+/* new addtion for user full name in audit log modal*/
+.umg-modal-audit {
+	width: 1100px;
+	max-width: 96vw;
+}
+
+.umg-audit-table-wrap {
+	max-height: 65vh;
+	overflow: auto;
+}
+
+.umg-audit-table {
+	width: 100%;
+	min-width: 1040px;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.umg-audit-table th,
+.umg-audit-table td {
+	box-sizing: border-box;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.umg-audit-col-time,
+.umg-audit-time {
+	width: 150px;
+}
+
+.umg-audit-col-actor,
+.umg-audit-actor {
+	width: 90px;
+	font-weight: 700;
+}
+
+.umg-audit-col-actor-name,
+.umg-audit-actor-name {
+	width: 145px;
+}
+
+.umg-audit-col-action,
+.umg-audit-action {
+	width: 150px;
+}
+
+.umg-audit-col-target,
+.umg-audit-target {
+	width: 140px;
+}
+
+.umg-audit-col-target-name,
+.umg-audit-target-name {
+	width: 145px;
+}
+
+.umg-audit-col-comment,
+.umg-audit-comment {
+	width: auto;
+	max-width: none;
+}
+
+.umg-audit-target .umg-audit-actor-sub {
+	white-space: nowrap;
+}
+
+
 /* Approvers picker: chip-based "search & select" multiselect */
 .umg-ms {
     position: relative;
@@ -1531,85 +1598,170 @@ button.umg-btn-sm {
 
 <!-- Audit Log modal: structured table (Time / Actor / Action / Target User / Comment)
      with a "Details" button for long comments, closes on Esc or the × in the header. -->
+<!-- Audit Log modal: actor and target identities are kept in separate,
+     aligned columns. Long comments open in the Details popup. -->
 <div class="umg-modal-backdrop" id="umg-audit-modal-backdrop">
-	<div class="umg-modal umg-modal-xwide">
+	<div class="umg-modal umg-modal-xwide umg-modal-audit">
 		<div class="umg-modal-header">
 			<h3>&#128337; <?= _('Audit Log') ?></h3>
+
 			<div style="display:flex;align-items:center;gap:8px;">
-				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-export-csv">&#128228; <?= _('Export CSV') ?></button>
-				<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">&times;</button>
+				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-export-csv">
+					&#128228; <?= _('Export CSV') ?>
+				</button>
+
+				<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">
+					&times;
+				</button>
 			</div>
 		</div>
 
 		<?php if ($activity_log): ?>
-		<div class="umg-audit-filter-row">
-			<input type="text" id="umg-audit-search" class="umg-audit-search" placeholder="<?= _('Search actor / user / comment...') ?>">
-			<select id="umg-audit-action-filter">
-				<option value=""><?= _('All Actions') ?></option>
-				<?php foreach ($action_labels as $key => $label): ?>
-				<option value="<?= umg_esc($key) ?>"><?= umg_esc($label) ?></option>
-				<?php endforeach; ?>
-			</select>
-			<input type="date" id="umg-audit-from-date" title="<?= _('From date') ?>">
-			<input type="date" id="umg-audit-to-date" title="<?= _('To date') ?>">
-			<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-clear">&times; <?= _('Clear') ?></button>
-		</div>
+			<div class="umg-audit-filter-row">
+				<input
+					type="text"
+					id="umg-audit-search"
+					class="umg-audit-search"
+					placeholder="<?= _('Search actor / target / comment...') ?>"
+				>
 
-		<div class="umg-audit-table-wrap">
-			<table class="umg-audit-table" id="umg-audit-table">
-				<thead>
-					<tr>
-						<th><?= _('Time') ?></th>
-						<th><?= _('Actor') ?></th>
-						<th><?= _('Action') ?></th>
-						<th><?= _('Target User') ?></th>
-						<th><?= _('Full Name') ?></th>
-						<th><?= _('Comment') ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ($activity_log as $entry): ?>
-						<?php
-						$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
-						$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
-						$comment_full = trim((string) ($entry['comment'] ?? ''));
-						$is_long = mb_strlen($comment_full) > UMG_LOG_COMMENT_TRUNCATE;
-						$comment_short = $is_long ? (mb_substr($comment_full, 0, UMG_LOG_COMMENT_TRUNCATE) . '…') : $comment_full;
-						$search_blob = mb_strtolower(($entry['actor'] ?? '') . ' ' . ($entry['username'] ?? '') . ' ' . $comment_full);
-						?>
-						<tr data-action="<?= umg_esc($entry['action'] ?? '') ?>" data-clock="<?= umg_esc($entry['clock'] ?? 0) ?>" data-search="<?= umg_esc($search_blob) ?>">
-							<td class="umg-audit-time"><?= !empty($entry['clock']) ? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])) : '-' ?></td>
-							<td>
-								<div class="umg-audit-actor"><?= umg_esc($entry['actor'] ?? '-') ?></div>
-							</td>
-							<td><span class="umg-badge <?= $badge_class ?>"><?= umg_esc($badge_label) ?></span></td>
-							<td class="umg-audit-target">
-								<?= umg_esc($entry['username'] ?? '-') ?>
-								<div class="umg-audit-actor-sub"><?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?></div>
-							</td>
-							<td class="umg-audit-fullname-cell"><?php $actor_full_name = trim(($entry['actor_name'] ?? '') . ' ' . ($entry['actor_surname'] ?? '')); ?><?= $actor_full_name !== '' ? umg_esc($actor_full_name) : '-' ?></td>
-							<td class="umg-audit-comment">
-								<?php if ($comment_full === ''): ?>
-									-
-								<?php else: ?>
-									<?= umg_esc($comment_short) ?>
-									<?php if ($is_long): ?>
-									<br>
-									<button type="button" class="umg-btn umg-btn-sm umg-audit-details-btn" style="margin-top:4px;"
-										data-full="<?= umg_esc($comment_full) ?>"
-										data-meta="<?= umg_esc((!empty($entry['clock']) ? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock']) : '-') . ' · ' . ($entry['actor'] ?? '-') . ' · ' . $badge_label . ' · ' . ($entry['username'] ?? '-')) ?>">
-										<?= _('Details') ?>
-									</button>
-									<?php endif; ?>
-								<?php endif; ?>
-							</td>
-						</tr>
+				<select id="umg-audit-action-filter">
+					<option value=""><?= _('All Actions') ?></option>
+
+					<?php foreach ($action_labels as $key => $label): ?>
+						<option value="<?= umg_esc($key) ?>">
+							<?= umg_esc($label) ?>
+						</option>
 					<?php endforeach; ?>
-				</tbody>
-			</table>
-		</div>
+				</select>
+
+				<input type="date" id="umg-audit-from-date" title="<?= _('From date') ?>">
+				<input type="date" id="umg-audit-to-date" title="<?= _('To date') ?>">
+
+				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-clear">
+					&times; <?= _('Clear') ?>
+				</button>
+			</div>
+
+			<div class="umg-audit-table-wrap">
+				<table class="umg-audit-table" id="umg-audit-table">
+					<thead>
+						<tr>
+							<th class="umg-audit-col-time"><?= _('Time') ?></th>
+							<th class="umg-audit-col-actor"><?= _('Actor') ?></th>
+							<th class="umg-audit-col-actor-name"><?= _('Actor Full Name') ?></th>
+							<th class="umg-audit-col-action"><?= _('Action') ?></th>
+							<th class="umg-audit-col-target"><?= _('Target User') ?></th>
+							<th class="umg-audit-col-target-name"><?= _('Target Full Name') ?></th>
+							<th class="umg-audit-col-comment"><?= _('Comment') ?></th>
+						</tr>
+					</thead>
+
+					<tbody>
+						<?php foreach ($activity_log as $entry): ?>
+							<?php
+							$badge_class = $action_classes[$entry['action'] ?? ''] ?? 'umg-badge-info';
+							$badge_label = $action_labels[$entry['action'] ?? ''] ?? ($entry['action'] ?? '');
+
+							$comment_full = trim((string) ($entry['comment'] ?? ''));
+							$is_long = mb_strlen($comment_full) > UMG_LOG_COMMENT_TRUNCATE;
+							$comment_short = $is_long
+								? mb_substr($comment_full, 0, UMG_LOG_COMMENT_TRUNCATE) . '…'
+								: $comment_full;
+
+							$actor_full_name = trim(
+								($entry['actor_name'] ?? '') . ' ' . ($entry['actor_surname'] ?? '')
+							);
+
+							$target_full_name = trim(
+								($entry['name'] ?? '') . ' ' . ($entry['surname'] ?? '')
+							);
+
+							$search_blob = mb_strtolower(
+								($entry['actor'] ?? '') . ' ' .
+								$actor_full_name . ' ' .
+								($entry['username'] ?? '') . ' ' .
+								$target_full_name . ' ' .
+								$comment_full
+							);
+							?>
+
+							<tr
+								data-action="<?= umg_esc($entry['action'] ?? '') ?>"
+								data-clock="<?= umg_esc($entry['clock'] ?? 0) ?>"
+								data-search="<?= umg_esc($search_blob) ?>"
+							>
+								<td class="umg-audit-time">
+									<?= !empty($entry['clock'])
+										? umg_esc(zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock']))
+										: '-' ?>
+								</td>
+
+								<td class="umg-audit-actor">
+									<?= umg_esc($entry['actor'] ?? '-') ?>
+								</td>
+
+								<td class="umg-audit-actor-name">
+									<?= $actor_full_name !== '' ? umg_esc($actor_full_name) : '-' ?>
+								</td>
+
+								<td class="umg-audit-action">
+									<span class="umg-badge <?= umg_esc($badge_class) ?>">
+										<?= umg_esc($badge_label) ?>
+									</span>
+								</td>
+
+								<td class="umg-audit-target">
+									<?= umg_esc($entry['username'] ?? '-') ?>
+
+									<div class="umg-audit-actor-sub">
+										<?= _('User ID:') ?> <?= umg_esc($entry['userid'] ?? '-') ?>
+									</div>
+								</td>
+
+								<td class="umg-audit-target-name">
+									<?= $target_full_name !== '' ? umg_esc($target_full_name) : '-' ?>
+								</td>
+
+								<td class="umg-audit-comment">
+									<?php if ($comment_full === ''): ?>
+										-
+									<?php else: ?>
+										<?= umg_esc($comment_short) ?>
+
+										<?php if ($is_long): ?>
+											<br>
+
+											<button
+												type="button"
+												class="umg-btn umg-btn-sm umg-audit-details-btn"
+												style="margin-top:4px;"
+												data-full="<?= umg_esc($comment_full) ?>"
+												data-meta="<?= umg_esc(
+													(!empty($entry['clock'])
+														? zbx_date2str(DATE_TIME_FORMAT_SECONDS, $entry['clock'])
+														: '-'
+													)
+													. ' · ' . ($entry['actor'] ?? '-')
+													. ' · ' . $badge_label
+													. ' · ' . ($entry['username'] ?? '-')
+												) ?>"
+											>
+												<?= _('Details') ?>
+											</button>
+										<?php endif; ?>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
 		<?php else: ?>
-		<div class="umg-empty-state"><span class="umg-empty-icon">&#128203;</span><?= _('No activity recorded yet.') ?></div>
+			<div class="umg-empty-state">
+				<span class="umg-empty-icon">&#128203;</span>
+				<?= _('No activity recorded yet.') ?>
+			</div>
 		<?php endif; ?>
 	</div>
 </div>
@@ -1997,9 +2149,9 @@ button.umg-btn-sm {
 		// declared further down in this same IIFE but function declarations
 		// are hoisted, so they're already callable here.
 		document.getElementById('umg-audit-export-csv').addEventListener('click', function() {
-			var header = ['Time', 'Actor', 'Action', 'Target User', 'Target Full Name', 'User ID', 'Comment'];
+			var header = ['Time', 'Actor', 'Actor Full Name', 'Action', 'Target User', 'Target Full Name', 'User ID', 'Comment'];
 			var lines = [header.join(',')];
-
+		
 			function auditCsvField(text) {
 				text = csvSafe(text);
 				if (/,|"|\n/.test(text)) {
@@ -2007,25 +2159,26 @@ button.umg-btn-sm {
 				}
 				return text;
 			}
-
+		
 			auditRows.forEach(function(row) {
 				if (row.classList.contains('umg-row-hidden')) return;
 				var cells = row.querySelectorAll('td');
 				var time = cells[0].textContent.trim();
 				var actor = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
-				var action = cells[2].textContent.trim();
-				var targetCell = cells[3];
+				var actorFullName = (row.querySelector('.umg-audit-actor-name') || {}).textContent || '';
+				var action = cells[3].textContent.trim();
+				var targetCell = cells[4];
 				var subDiv = targetCell.querySelector('.umg-audit-actor-sub');
 				var userid = subDiv ? subDiv.textContent.replace(/^[^:]*:/, '').trim() : '';
 				var username = subDiv ? targetCell.textContent.replace(subDiv.textContent, '').trim() : targetCell.textContent.trim();
-				var actorFullName = cells[4].textContent.trim();
+				var targetFullName = (row.querySelector('.umg-audit-target-name') || {}).textContent || '';
 				var detailsBtn = row.querySelector('.umg-audit-details-btn');
-				var comment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : cells[5].textContent.trim();
-
-				var fields = [time, actor.trim(), action, username, actorFullName, userid, comment];
+				var comment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : cells[6].textContent.trim();
+				
+				var fields = [time, actor.trim(), actorFullName.trim(), action, username, targetFullName.trim(), userid, comment];
 				lines.push(fields.map(auditCsvField).join(','));
 			});
-
+		
 			var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
 			var url = URL.createObjectURL(blob);
 			var a = document.createElement('a');
