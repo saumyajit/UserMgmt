@@ -8,6 +8,9 @@ use CControllerResponseData;
 
 class UserPolicy extends CController {
 
+	const DEFAULT_MIN_ACCOUNT_AGE_DAYS = 60;
+	const DEFAULT_INACTIVITY_THRESHOLD_DAYS = 45;
+	const CONFIG_FILE = __DIR__ . '/../data/policy_config.json';
 	private const ACCOUNT_AGE_THRESHOLD_DAYS = 60;
 	private const INACTIVITY_THRESHOLD_DAYS = 45;
 
@@ -26,6 +29,83 @@ class UserPolicy extends CController {
 		return $this->getUserType() >= USER_TYPE_SUPER_ADMIN;
 	}
 
+	/**
+	 * Duplicated intentionally in UserPolicyExecute.php and UserPolicyConfig.php
+	 * so no cross-file class/namespace dependency exists outside of registered
+	 * module actions (see memory: avoids autoload/redeclare fatals seen previously).
+	 */
+	private static function loadConfig(): array {
+		$defaults = [
+			'min_account_age_days' => self::DEFAULT_MIN_ACCOUNT_AGE_DAYS,
+			'inactivity_threshold_days' => self::DEFAULT_INACTIVITY_THRESHOLD_DAYS
+		];
+
+		if (!is_file(self::CONFIG_FILE)) {
+			return $defaults;
+		}
+
+		$raw = @file_get_contents(self::CONFIG_FILE);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		if (!is_array($decoded)) {
+			return $defaults;
+		}
+
+		return [
+			'min_account_age_days' => isset($decoded['min_account_age_days'])
+				? (int) $decoded['min_account_age_days']
+				: $defaults['min_account_age_days'],
+			'inactivity_threshold_days' => isset($decoded['inactivity_threshold_days'])
+				? (int) $decoded['inactivity_threshold_days']
+				: $defaults['inactivity_threshold_days'],
+			'approvers' => isset($decoded['approvers']) && is_array($decoded['approvers'])
+				? $decoded['approvers']
+				: []
+		];
+	}
+
+	private static function loadApprovalQueue(): array {
+		$file = __DIR__ . '/../data/approval_queue.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function loadDisabledLog(): array {
+		$file = __DIR__ . '/../data/disabled_log.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	private static function loadActivityLog(): array {
+		$file = __DIR__ . '/../data/activity_log.json';
+
+		if (!is_file($file)) {
+			return [];
+		}
+
+		$raw = @file_get_contents($file);
+		$decoded = $raw !== false ? json_decode($raw, true) : null;
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	protected function doAction(): void {
+		$config = self::loadConfig();
+		$now = time();
 
 	protected function doAction(): void {
 
@@ -53,12 +133,21 @@ class UserPolicy extends CController {
 			'filter' => [
 				'status' => 0
 			],
+			'selectUsrgrps' => ['usrgrpid', 'users_status'],
 			'sortfield' => 'username',
 			'sortorder' => ZBX_SORT_UP
 		]);
 
 
 		/*
+		 * ------------------------------------------------------------
+		 * 1a. Resolve which of these users hold a Super Admin role, so the
+		 * "Approvers" picker (Settings modal) only ever offers Super Admins.
+		 * ------------------------------------------------------------
+		 */
+		$superadmin_roles = API::Role()->get([
+			'output' => ['roleid'],
+			'filter' => ['type' => USER_TYPE_SUPER_ADMIN]
 		 * ========================================================
 		 * 2. GET USER CREATION AUDIT RECORDS
 		 * ========================================================
@@ -83,9 +172,31 @@ class UserPolicy extends CController {
 			'sortfield' => 'clock',
 			'sortorder' => 'DESC'
 		]);
+		$superadmin_roleids = array_column($superadmin_roles, 'roleid');
+
+		$superadmins = [];
+		foreach ($users as $u) {
+			if (in_array($u['roleid'], $superadmin_roleids)) {
+				$superadmins[] = [
+					'userid' => $u['userid'],
+					'username' => $u['username']
+				];
+			}
+		}
 
 
 		/*
+		 * ------------------------------------------------------------
+		 * 2. Get user creation audit records
+		 * action = 0 -> Add, resourcetype = 0 -> User
+		 * ------------------------------------------------------------
+		 */
+		$user_creation_logs = API::AuditLog()->get([
+			'output' => ['auditid', 'userid', 'username', 'clock', 'action', 'resourcetype', 'resourceid', 'resourcename', 'ip'],
+			'filter' => ['action' => 0, 'resourcetype' => 0],
+			'sortfield' => 'clock',
+			'sortorder' => ZBX_SORT_DOWN
+		]);
 		 * ========================================================
 		 * 3. BUILD CREATION TIME LOOKUP
 		 * ========================================================
@@ -95,6 +206,7 @@ class UserPolicy extends CController {
 
 		$creation_times = [];
 
+		$creation_times = [];
 		foreach ($user_creation_logs as $audit) {
 
 			if (!isset($audit['resourceid']) || !isset($audit['clock'])) {
@@ -110,6 +222,20 @@ class UserPolicy extends CController {
 
 
 		/*
+		 * ------------------------------------------------------------
+		 * 3. Get login audit records
+		 * action = 8 -> Login, resourcetype = 0 -> User
+		 * ------------------------------------------------------------
+		 */
+		$login_logs = API::AuditLog()->get([
+			'output' => ['auditid', 'userid', 'username', 'clock', 'action', 'resourcetype', 'resourceid', 'resourcename', 'ip'],
+			'filter' => ['action' => 8, 'resourcetype' => 0],
+			'sortfield' => 'clock',
+			'sortorder' => ZBX_SORT_DOWN,
+			'limit' => 2000
+		]);
+
+		$last_login_times = [];
 		 * ========================================================
 		 * 4. CLASSIFY USERS BY ACCOUNT AGE
 		 * ========================================================
@@ -277,6 +403,77 @@ class UserPolicy extends CController {
 			}
 		}
 
+		$approval_queue = self::loadApprovalQueue();
+		$pending_userids = [];
+		foreach ($approval_queue as $index => $entry) {
+			if (($entry['status'] ?? '') === 'pending') {
+				$pending_userids[(string) $entry['userid']] = $entry;
+			}
+		}
+
+		// Newest-first list of pending entries for the approvals panel, each tagged
+		// with its index in the queue file so approve/reject can address it directly.
+		$pending_queue = [];
+		foreach ($approval_queue as $index => $entry) {
+			if (($entry['status'] ?? '') === 'pending') {
+				$entry['queue_index'] = $index;
+				$pending_queue[] = $entry;
+			}
+		}
+
+		usort($pending_queue, function ($a, $b) {
+			return ($b['flagged_at'] ?? 0) <=> ($a['flagged_at'] ?? 0);
+		});
+
+		$disabled_log = self::loadDisabledLog();
+		$activity_log = self::loadActivityLog();
+
+		/*
+		 * Per-user "latest activity" entry: newest matching entry across the
+		 * legacy disabled_log.json plus EVERY action type in activity_log.json
+		 * (flag / disable / approve / reject) — not just disable/approve as
+		 * before. Widening this is what makes the Comment column (and the CSV
+		 * export) actually populate for users whose only recorded action so
+		 * far is a flag or a rejection, instead of showing "-" for almost
+		 * everyone.
+		 */
+		$latest_activity = [];
+		foreach ($disabled_log as $entry) {
+			$latest_activity[(string) $entry['userid']] = $entry;
+		}
+
+		foreach ($activity_log as $entry) {
+			$uid = (string) ($entry['userid'] ?? '');
+			if ($uid === '') {
+				continue;
+			}
+			$existing = $latest_activity[$uid] ?? null;
+			if (!$existing || ($entry['clock'] ?? 0) >= ($existing['clock'] ?? 0)) {
+				$latest_activity[$uid] = $entry;
+			}
+		}
+
+		// Newest-first slice powering the Audit Log popup.
+		$activity_log_display = $activity_log;
+		usort($activity_log_display, function ($a, $b) {
+			return ($b['clock'] ?? 0) <=> ($a['clock'] ?? 0);
+		});
+		$activity_log_display = array_slice($activity_log_display, 0, 100);
+
+		/*
+		 * ------------------------------------------------------------
+		 * 4. Compute policy fields per user
+		 *
+		 * creation_age > min_account_age_days
+		 *   AND last_login is NULL => DISABLE (never_logged_in)
+		 * creation_age > min_account_age_days
+		 *   AND last_login exists
+		 *   AND last_login_age > inactivity_threshold_days => DISABLE (inactive)
+		 * Everything else => NO ACTION
+		 * ------------------------------------------------------------
+		 */
+		foreach ($users as &$user) {
+			$userid = (string) $user['userid'];
 
 		/*
 		 * ========================================================
@@ -430,8 +627,16 @@ class UserPolicy extends CController {
 		$data = [
 			'title' => _('User Management'),
 
-			'users' => $users,
+			$creation_clock = $creation_times[$userid] ?? null;
+			$last_login_clock = $last_login_times[$userid] ?? null;
 
+			$creation_age_days = $creation_clock !== null
+				? (int) floor(($now - $creation_clock) / 86400)
+				: null;
+
+			$last_login_age_days = $last_login_clock !== null
+				? (int) floor(($now - $last_login_clock) / 86400)
+				: null;
 			'candidate_users' => $users_over_threshold,
 
 			'evaluated_users' => $evaluated_users,
@@ -448,8 +653,87 @@ class UserPolicy extends CController {
 
 			'recommended_disable' => $recommended_disable,
 
-			'creation_times' => $creation_times,
+			$account_old_enough = $creation_age_days !== null
+				&& $creation_age_days > $config['min_account_age_days'];
+			$account_age_unknown = $creation_age_days === null;
 
+			$never_logged_in = $last_login_clock === null;
+			$inactive_past_threshold = $last_login_age_days !== null
+				&& $last_login_age_days > $config['inactivity_threshold_days'];
+
+			$already_disabled = false;
+			foreach ($user['usrgrps'] as $usrgrp) {
+				if ((int) $usrgrp['users_status'] === GROUP_STATUS_DISABLED) {
+					$already_disabled = true;
+					break;
+				}
+			}
+
+			if ($already_disabled) {
+				$recommendation = 'no_action';
+				$reason = 'already_disabled';
+			}
+			elseif (($account_old_enough || $account_age_unknown) && ($never_logged_in || $inactive_past_threshold)) {
+				$recommendation = 'disable';
+				$reason = $never_logged_in ? 'never_logged_in' : 'inactive';
+			}
+			elseif (!$account_old_enough && !$account_age_unknown) {
+				$recommendation = 'no_action';
+				$reason = 'new_account';
+			}
+			else {
+				$recommendation = 'no_action';
+				$reason = 'active';
+			}
+
+			$latest = $latest_activity[$userid] ?? null;
+
+			$user['creation_clock'] = $creation_clock;
+			$user['creation_age_days'] = $creation_age_days;
+			$user['last_login_clock'] = $last_login_clock;
+			$user['last_login_age_days'] = $last_login_age_days;
+			$user['recommendation'] = $recommendation;
+			$user['reason'] = $reason;
+			$user['pending_approval'] = isset($pending_userids[$userid]);
+			$user['pending_comment'] = $pending_userids[$userid]['comment'] ?? null;
+			// NEW: last recorded activity for this user, of any action type,
+			// plus who performed it and when — used to populate the Comment
+			// column (and CSV) whenever a disable comment specifically isn't set.
+			$user['last_action'] = $latest['action'] ?? null;
+			$user['disable_comment'] = $latest['comment'] ?? null;
+			$user['disabled_by'] = $latest['actor'] ?? null;
+			$user['disabled_at'] = $latest['clock'] ?? null;
+		}
+		unset($user);
+
+		$summary = [
+			'total' => count($users),
+			'never_logged_in' => 0,
+			'inactive_over_threshold' => 0,
+			'recommended_disable' => 0
+		];
+
+		foreach ($users as $user) {
+			if ($user['reason'] === 'never_logged_in') {
+				$summary['never_logged_in']++;
+			}
+			if ($user['reason'] === 'inactive') {
+				$summary['inactive_over_threshold']++;
+			}
+			if ($user['recommendation'] === 'disable') {
+				$summary['recommended_disable']++;
+			}
+		}
+
+		$data = [
+			'title' => _('User Management'),
+			'users' => $users,
+			'login_logs' => array_slice($login_logs, 0, 50),
+			'config' => $config,
+			'summary' => $summary,
+			'pending_queue' => $pending_queue,
+			'activity_log' => $activity_log_display,
+			'superadmins' => $superadmins
 			'last_login_times' => $last_login_times,
 
 			'creation_logs' => $user_creation_logs,
