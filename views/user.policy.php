@@ -1521,7 +1521,10 @@ button.umg-btn-sm {
 	<div class="umg-modal umg-modal-xwide">
 		<div class="umg-modal-header">
 			<h3>&#128337; <?= _('Audit Log') ?></h3>
-			<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">&times;</button>
+			<div style="display:flex;align-items:center;gap:8px;">
+				<button type="button" class="umg-btn umg-btn-sm" id="umg-audit-export-csv">&#128228; <?= _('Export CSV') ?></button>
+				<button type="button" class="umg-modal-close-x" id="umg-audit-modal-close">&times;</button>
+			</div>
 		</div>
 
 		<?php if ($activity_log): ?>
@@ -1970,6 +1973,50 @@ button.umg-btn-sm {
 			auditFromDate.value = '';
 			auditToDate.value = '';
 			applyAuditFilters();
+		});
+
+		// Export CSV — respects whatever the filters currently have visible,
+		// same convention as the main table's Export CSV. csvSafe/csvField are
+		// declared further down in this same IIFE but function declarations
+		// are hoisted, so they're already callable here.
+		document.getElementById('umg-audit-export-csv').addEventListener('click', function() {
+			var header = ['Time', 'Actor', 'Action', 'Target User', 'User ID', 'Comment'];
+			var lines = [header.join(',')];
+
+			function auditCsvField(text) {
+				text = csvSafe(text);
+				if (/,|"|\n/.test(text)) {
+					text = '"' + text.replace(/"/g, '""') + '"';
+				}
+				return text;
+			}
+
+			auditRows.forEach(function(row) {
+				if (row.classList.contains('umg-row-hidden')) return;
+				var cells = row.querySelectorAll('td');
+				var time = cells[0].textContent.trim();
+				var actor = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
+				var action = cells[2].textContent.trim();
+				var targetCell = cells[3];
+				var subDiv = targetCell.querySelector('.umg-audit-actor-sub');
+				var userid = subDiv ? subDiv.textContent.replace(/^[^:]*:/, '').trim() : '';
+				var username = subDiv ? targetCell.textContent.replace(subDiv.textContent, '').trim() : targetCell.textContent.trim();
+				var detailsBtn = row.querySelector('.umg-audit-details-btn');
+				var comment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : cells[4].textContent.trim();
+
+				var fields = [time, actor.trim(), action, username, userid, comment];
+				lines.push(fields.map(auditCsvField).join(','));
+			});
+
+			var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+			var url = URL.createObjectURL(blob);
+			var a = document.createElement('a');
+			a.href = url;
+			a.download = 'user_management_audit_log.csv';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
 		});
 	}
 
