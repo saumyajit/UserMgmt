@@ -1370,10 +1370,10 @@ button.umg-btn-sm {
 						$rec_class = 'umg-badge-warning';
 						$rec_label = _('Approved — Ready to Disable');
 					}
-					elseif ($user['reason'] === 'already_disabled') {
-						$rec_class = 'umg-badge-info';
-						$rec_label = _('Already Disabled');
-					}
+#					elseif ($user['reason'] === 'already_disabled') {
+#						$rec_class = 'umg-badge-info';
+#						$rec_label = _('Already Disabled');
+#					}
 					elseif ($user['recommendation'] === 'disable') {
 						$rec_class = 'umg-badge-danger';
 						$rec_label = _('Disable');
