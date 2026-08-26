@@ -17,13 +17,15 @@ $action_labels = [
 	'flag' => _('Flagged for approval'),
 	'disable' => _('Disabled'),
 	'approve' => _('Approved'),
-	'reject' => _('Rejected')
+	'reject' => _('Rejected'),
+	'settings_update' => _('Settings Updated')
 ];
 $action_classes = [
 	'flag' => 'umg-badge-warning',
 	'disable' => 'umg-badge-danger',
 	'approve' => 'umg-badge-danger',
-	'reject' => 'umg-badge-info'
+	'reject' => 'umg-badge-info',
+	'settings_update' => 'umg-badge-purple'
 ];
 
 // Approvers configured today (usernames), used to pre-seed the chip picker below.
@@ -597,6 +599,15 @@ body, .wrapper {
     background: #2f7dd1;
 }
 
+.umg-badge-purple {
+    background: linear-gradient(90deg, #ece3fb, #f3ecfd);
+    color: #5b2a9d;
+}
+
+.umg-badge-purple::before {
+    background: #8b5cf6;
+}
+
 .umg-results-header {
     display: flex;
     justify-content: space-between;
@@ -846,19 +857,34 @@ button.umg-btn-sm {
 /* Audit Log filter row + structured table */
 .umg-audit-filter-row {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
     flex-wrap: wrap;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .umg-audit-filter-row input, .umg-audit-filter-row select {
-    height: 32px;
+    height: 30px;
     border: 1.5px solid #dde1ea;
-    border-radius: 20px;
-    padding: 0 12px;
-    font-size: 12.5px;
+    border-radius: 16px;
+    padding: 0 10px;
+    font-size: 12px;
     background: #fbfcfe;
+}
+
+/* The generic ".umg-modal input[type=text/date]" rule further down forces
+   width:100% + large top/bottom margins on every text/date input in every
+   modal (it's meant for single-field modals like Flag/Approve/Reject). That
+   rule was leaking into this filter row and stacking each field onto its own
+   full-width line instead of a compact row. This override wins on
+   specificity (two classes instead of one) regardless of source order. */
+.umg-modal .umg-audit-filter-row input[type=text],
+.umg-modal .umg-audit-filter-row input[type=date] {
+    width: auto;
+    margin: 0;
+    box-sizing: border-box;
+    border-radius: 16px;
+    padding: 0 10px;
 }
 
 .umg-audit-filter-row input:focus, .umg-audit-filter-row select:focus {
@@ -868,8 +894,19 @@ button.umg-btn-sm {
 }
 
 .umg-audit-search {
-    min-width: 200px;
-    flex: 1;
+    min-width: 160px;
+    max-width: 280px;
+    flex: 1 1 160px;
+}
+
+.umg-audit-filter-row select {
+    flex: 0 0 auto;
+    min-width: 120px;
+}
+
+.umg-audit-filter-row input[type=date] {
+    flex: 0 0 128px;
+    width: 128px;
 }
 
 .umg-audit-table-wrap {
@@ -1884,27 +1921,49 @@ button.umg-btn-sm {
 		var auditFromDate = document.getElementById('umg-audit-from-date');
 		var auditToDate = document.getElementById('umg-audit-to-date');
 
+		// Build the searchable text straight from what's actually rendered in
+		// each row (actor / target user / comment cells) instead of trusting a
+		// separately server-built data-search attribute to stay in sync with
+		// it — removes any chance of the two silently drifting apart (quote/
+		// unicode encoding, etc.) as a cause of "search matches nothing".
+		auditRows.forEach(function(row) {
+			var actorText = (row.querySelector('.umg-audit-actor') || {}).textContent || '';
+			var targetText = (row.querySelector('.umg-audit-target') || {}).textContent || '';
+			var commentText = (row.querySelector('.umg-audit-comment') || {}).textContent || '';
+			var detailsBtn = row.querySelector('.umg-audit-details-btn');
+			var fullComment = detailsBtn ? (detailsBtn.getAttribute('data-full') || '') : '';
+			row.__auditSearchText = (actorText + ' ' + targetText + ' ' + commentText + ' ' + fullComment).toLowerCase();
+		});
+
 		function applyAuditFilters() {
 			var q = auditSearch.value.trim().toLowerCase();
 			var action = auditActionFilter.value;
-			var fromTs = auditFromDate.value ? new Date(auditFromDate.value + 'T00:00:00').getTime() / 1000 : null;
-			var toTs = auditToDate.value ? new Date(auditToDate.value + 'T23:59:59').getTime() / 1000 : null;
+			// valueAsNumber is UTC midnight (ms) for the picked calendar date —
+			// unambiguous, unlike parsing a "YYYY-MM-DDT00:00:00" string (which
+			// depends on local-timezone parsing rules and was silently drifting
+			// the comparison against the server's UTC-epoch data-clock values).
+			var fromTs = (auditFromDate.value && !isNaN(auditFromDate.valueAsNumber)) ? auditFromDate.valueAsNumber / 1000 : null;
+			var toTs = (auditToDate.value && !isNaN(auditToDate.valueAsNumber)) ? (auditToDate.valueAsNumber / 1000) + 86399 : null;
 
+			var visible = 0;
 			auditRows.forEach(function(row) {
 				var matches = true;
-				if (q && row.getAttribute('data-search').indexOf(q) === -1) matches = false;
+				if (q && row.__auditSearchText.indexOf(q) === -1) matches = false;
 				if (action && row.getAttribute('data-action') !== action) matches = false;
 				var clock = parseInt(row.getAttribute('data-clock'), 10) || 0;
 				if (fromTs !== null && clock < fromTs) matches = false;
 				if (toTs !== null && clock > toTs) matches = false;
 				row.classList.toggle('umg-row-hidden', !matches);
+				if (matches) visible++;
 			});
 		}
 
 		auditSearch.addEventListener('input', applyAuditFilters);
 		auditActionFilter.addEventListener('change', applyAuditFilters);
 		auditFromDate.addEventListener('change', applyAuditFilters);
+		auditFromDate.addEventListener('input', applyAuditFilters);
 		auditToDate.addEventListener('change', applyAuditFilters);
+		auditToDate.addEventListener('input', applyAuditFilters);
 		document.getElementById('umg-audit-clear').addEventListener('click', function() {
 			auditSearch.value = '';
 			auditActionFilter.value = '';
