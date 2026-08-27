@@ -298,6 +298,10 @@ class UserPolicyExecute extends CController {
 		if ($mode === 'approve') {
 			$this->enforceApproverPermission($actor);
 
+			if ($comment === '') {
+				$this->respondJson(false, _('A comment is required to approve this request.'));
+			}
+
 			$queue_index = $this->getInput('queue_index', null);
 
 			if ($queue_index === null) {
@@ -423,6 +427,10 @@ class UserPolicyExecute extends CController {
 
 		if ($mode === 'reject') {
 			$this->enforceApproverPermission($actor);
+
+			if ($comment === '') {
+				$this->respondJson(false, _('A comment is required to reject this request.'));
+			}
 
 			$queue_index = $this->getInput('queue_index', null);
 
