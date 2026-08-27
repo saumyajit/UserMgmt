@@ -788,7 +788,6 @@ button.umg-btn {
 }
 
 button.umg-btn:hover {
-    background: #f3f5fb;
     border-color: #c3c9d6;
     box-shadow: 0 3px 8px rgba(31,41,55,0.08);
 }
