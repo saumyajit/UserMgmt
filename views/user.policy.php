@@ -1473,7 +1473,7 @@ button.umg-btn-sm {
 		</div>
 		<div class="umg-card-title" id="umg-approve-modal-userlist" style="text-transform:none;margin-bottom:12px;"></div>
 		<div class="umg-subtext" style="margin-bottom:8px;"><?= _('Approving only marks this request approved. A different Super Admin will still need to complete the separate Disable step.') ?></div>
-		<label><?= _('Approval Comment (optional, added to the requester\'s comment)') ?></label>
+		<label><?= _('Approval Comment (required, added to the requester\'s comment)') ?></label>
 		<textarea rows="3" id="umg-approve-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-approve-cancel"><?= _('Cancel') ?></button>
@@ -1507,7 +1507,7 @@ button.umg-btn-sm {
 			<h3>&#10060; <?= _('Reject Request') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-reject-close-x">&times;</button>
 		</div>
-		<label><?= _('Reason (optional)') ?></label>
+		<label><?= _('Reason (required)') ?></label>
 		<textarea rows="3" id="umg-reject-comment"></textarea>
 		<div class="umg-modal-actions">
 			<button type="button" class="umg-btn" id="umg-reject-cancel"><?= _('Cancel') ?></button>
@@ -1825,6 +1825,11 @@ button.umg-btn-sm {
 			</span>
 		</div>
 
+		<div class="umg-filter" style="margin-top:14px;">
+			<label><?= _('Reason for change (required)') ?></label>
+			<textarea rows="2" id="umg-cfg-comment" placeholder="<?= _('Why are you changing this policy?') ?>"></textarea>
+		</div>
+
 		<div class="umg-modal-actions" style="margin-top:18px;">
 			<button type="button" class="umg-btn" id="umg-settings-close"><?= _('Close') ?></button>
 			<button type="button" class="umg-btn umg-btn-primary" id="umg-cfg-save">&#128190; <?= _('Save Policy') ?></button>
@@ -2043,7 +2048,13 @@ button.umg-btn-sm {
 	document.getElementById('umg-approve-cancel').addEventListener('click', function() { closeAndMaybeReopenPending(approveBackdrop); });
 	document.getElementById('umg-approve-close-x').addEventListener('click', function() { closeAndMaybeReopenPending(approveBackdrop); });
 	document.getElementById('umg-approve-confirm').addEventListener('click', function() {
-		submitAction({ mode: 'approve', queue_index: approveIndex, comment: approveComment.value.trim() });
+		var c = approveComment.value.trim();
+		if (c === '') {
+			alert('<?= _('A comment is required to approve this request.') ?>');
+			approveComment.focus();
+			return;
+		}
+		submitAction({ mode: 'approve', queue_index: approveIndex, comment: c });
 		closeBackdrop(approveBackdrop);
 	});
 
@@ -2099,7 +2110,13 @@ button.umg-btn-sm {
 	document.getElementById('umg-reject-cancel').addEventListener('click', function() { closeAndMaybeReopenPending(rejectBackdrop); });
 	document.getElementById('umg-reject-close-x').addEventListener('click', function() { closeAndMaybeReopenPending(rejectBackdrop); });
 	document.getElementById('umg-reject-confirm').addEventListener('click', function() {
-		submitAction({ mode: 'reject', queue_index: rejectIndex, comment: rejectComment.value.trim() });
+		var c = rejectComment.value.trim();
+		if (c === '') {
+			alert('<?= _('A comment is required to reject this request.') ?>');
+			rejectComment.focus();
+			return;
+		}
+		submitAction({ mode: 'reject', queue_index: rejectIndex, comment: c });
 		closeBackdrop(rejectBackdrop);
 	});
 
@@ -2254,6 +2271,7 @@ button.umg-btn-sm {
 	// Settings modal wiring
 	var settingsBackdrop = document.getElementById('umg-settings-modal-backdrop');
 	document.getElementById('umg-settings-btn').addEventListener('click', function() {
+		document.getElementById('umg-cfg-comment').value = '';
 		openBackdrop(settingsBackdrop);
 	});
 	document.getElementById('umg-settings-close').addEventListener('click', function() {
@@ -2359,12 +2377,20 @@ button.umg-btn-sm {
 	// Policy save — approvers are read from the chip picker, joined the same
 	// way the backend already expects (comma-separated usernames).
 	document.getElementById('umg-cfg-save').addEventListener('click', function() {
+		var cfgComment = document.getElementById('umg-cfg-comment').value.trim();
+		if (cfgComment === '') {
+			alert('<?= _('A reason is required to save policy changes.') ?>');
+			document.getElementById('umg-cfg-comment').focus();
+			return;
+		}
+
 		var approvers = (window.__umgGetSelectedApprovers ? window.__umgGetSelectedApprovers() : []).join(',');
 
 		var body = new URLSearchParams();
 		body.append('min_account_age_days', document.getElementById('umg-cfg-min-age').value);
 		body.append('inactivity_threshold_days', document.getElementById('umg-cfg-threshold').value);
 		body.append('approvers', approvers);
+		body.append('comment', cfgComment);
 
 		fetch('zabbix.php?action=user.policy.config', {
 			method: 'POST',
