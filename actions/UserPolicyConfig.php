@@ -19,7 +19,8 @@ class UserPolicyConfig extends CController {
 		$fields = [
 			'min_account_age_days' => 'int32|ge 0|le 3650',
 			'inactivity_threshold_days' => 'int32|ge 0|le 3650',
-			'approvers' => 'string'
+			'approvers' => 'string',
+			'comment' => 'string'
 		];
 
 		$ret = $this->validateInput($fields);
@@ -134,6 +135,12 @@ class UserPolicyConfig extends CController {
 	}
 
 	protected function doAction(): void {
+		$reason = trim($this->getInput('comment', ''));
+
+		if ($reason === '') {
+			$this->respondJson(false, _('A reason is required to save policy changes.'));
+		}
+
 		$approvers_raw = trim($this->getInput('approvers', ''));
 		$approvers = $approvers_raw === '' ? [] : array_values(array_unique(array_filter(
 			array_map('trim', explode(',', $approvers_raw))
@@ -156,7 +163,10 @@ class UserPolicyConfig extends CController {
 			$this->respondJson(false, _('Failed to save configuration (data/ not writable).'));
 		}
 
-		self::logActivity(self::describeChanges($old_config, $config), self::currentActor());
+		$diff = self::describeChanges($old_config, $config);
+		$logged_comment = $reason . ($diff !== '' ? ' | ' . $diff : '');
+
+		self::logActivity($logged_comment, self::currentActor());
 
 		$this->respondJson(true, _('Policy thresholds updated.'), ['config' => $config]);
 	}
