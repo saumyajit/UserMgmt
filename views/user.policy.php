@@ -476,7 +476,8 @@ body, .wrapper {
     background: linear-gradient(180deg, #f3f6fc 0%, #eaeff8 100%);
     text-align: left;
     padding: 11px 10px;
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .04em;
     color: #445;
@@ -774,10 +775,10 @@ body, .wrapper {
    buttons elsewhere (on white panels/modals) stay visible instead of
    rendering as white-on-white. */
 button.umg-btn {
-    height: 34px;
+    height: 30px;
     border: 1.5px solid #a08fad;
     background: #fff;
-    border-radius: 7px;
+    border-radius: 14px;
     padding: 0 16px;
     cursor: pointer;
     font-size: 13px;
@@ -1786,7 +1787,7 @@ button.umg-btn-sm {
 <div class="umg-modal-backdrop" id="umg-settings-modal-backdrop">
 	<div class="umg-modal umg-modal-wide">
 		<div class="umg-modal-header">
-			<h3>&#9881; <?= _('Inactivity Policy Settings') ?></h3>
+			<h3>⚙️ <?= _('Inactivity Policy Settings') ?></h3>
 			<button type="button" class="umg-modal-close-x" id="umg-settings-close-x">&times;</button>
 		</div>
 		<div class="umg-modal-subtitle"><?= _('Controls which accounts are recommended for disabling, and who may approve disable requests.') ?></div>
