@@ -167,6 +167,12 @@ class UserPolicy extends CController {
 		 * ------------------------------------------------------------
 		 * 3. Get login audit records
 		 * action = 8 -> Login, resourcetype = 0 -> User
+		 *
+		 * This captures the discrete moment of authentication only. It is
+		 * kept as a FALLBACK for 3b below, for users whose session record
+		 * has since been purged by Housekeeping (session lifetime setting,
+		 * default 365 days) — without it, a genuinely-once-active user
+		 * would incorrectly show as "Never" once their session expires.
 		 * ------------------------------------------------------------
 		 */
 		$login_logs = API::AuditLog()->get([
@@ -182,6 +188,43 @@ class UserPolicy extends CController {
 			$userid = (string) $login['userid'];
 			if (!isset($last_login_times[$userid])) {
 				$last_login_times[$userid] = (int) $login['clock'];
+			}
+		}
+
+		/*
+		 * ------------------------------------------------------------
+		 * 3b. Session-based last activity — same source Zabbix's own
+		 * Administration -> Users list uses for its "Login" column
+		 * (Yes/No (<timestamp>)): a direct query against the sessions
+		 * table for MAX(lastaccess) per user. This is NOT reachable via
+		 * any documented API method (user.get/auditlog.get do not expose
+		 * it) — the native frontend itself queries the sessions table
+		 * directly, and since this module runs inside the same Zabbix
+		 * frontend process (not as an external API client), it can do
+		 * the same, using the same DB/DBselect/dbConditionInt globals
+		 * core Zabbix code uses.
+		 *
+		 * sessions.lastaccess is updated on EVERY authenticated request
+		 * while a session stays alive (CWebUser::checkAuthentication()
+		 * with extend=true, called on every page load) — not just at the
+		 * initial login — so this is "last seen active", matching what
+		 * the native page shows, and is preferred over the audit-log
+		 * login event above wherever a session row still exists.
+		 * ------------------------------------------------------------
+		 */
+		$session_last_access = [];
+		$all_userids = array_column($users, 'userid');
+
+		if ($all_userids) {
+			$db_sessions = DBselect(
+				'SELECT s.userid,MAX(s.lastaccess) AS lastaccess'.
+				' FROM sessions s'.
+				' WHERE '.dbConditionInt('s.userid', $all_userids).
+				' GROUP BY s.userid'
+			);
+
+			while ($db_session = DBfetch($db_sessions)) {
+				$session_last_access[(string) $db_session['userid']] = (int) $db_session['lastaccess'];
 			}
 		}
 
@@ -275,7 +318,10 @@ class UserPolicy extends CController {
 			$userid = (string) $user['userid'];
 
 			$creation_clock = $creation_times[$userid] ?? null;
-			$last_login_clock = $last_login_times[$userid] ?? null;
+			// Prefer the session table's last-activity time (matches the
+			// native Users list exactly); fall back to the audit-log Login
+			// event only if that user's session record has been purged.
+			$last_login_clock = $session_last_access[$userid] ?? $last_login_times[$userid] ?? null;
 
 			$creation_age_days = $creation_clock !== null
 				? (int) floor(($now - $creation_clock) / 86400)
